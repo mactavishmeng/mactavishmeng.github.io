@@ -1,0 +1,371 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="Burpsuite,Frida,工具配置,Android," />
+  
+
+  
+    <meta name="description" content="利用Frida手动绕过Android-APP证书校验" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>利用Frida手动绕过Android-APP证书校验 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        利用Frida手动绕过Android-APP证书校验
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2020-04-12T13:45:12.000Z">
+        2020-04-12
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Android/" rel="tag">Android</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Burpsuite/" rel="tag">Burpsuite</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Frida/" rel="tag">Frida</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B7%A5%E5%85%B7%E9%85%8D%E7%BD%AE/" rel="tag">工具配置</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 20 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>HTTPS证书校验绕过有很多成熟的方法，比如SSL Unpinning，JustTrustMe等，但是遇到混淆过或写在so里的校验的时候是无效的。</p>
+<p>本文写的可能会有些啰嗦，记录了我整个尝试的思路。没有直接写绕过方法，是想给其他和我一样的萌新提供一些思路，如有不妥之处大佬们轻喷。</p>
+<a id="more"></a>
+
+<p>最近买了一个TP-Link的摄像头，顺便下载的它配套的安卓应用，想看看这个应用在与服务器交互的时候都发了些啥，因此准备抓包。当我把姿势都摆好了之后，却发现它的流量在<code>Burpsuite</code>里完全没出现。</p>
+<p>好的吧，我知道可能你是校验了证书。</p>
+<p>掏出祖传的<code>XPosed</code>插件<code>SSL Unpinning</code>，竟然没用。emmmm，那可能是进行了混淆，XPosed在Hook的时候需要特定的包名，如果包名被混淆了自然是Hook不到的嘛。</p>
+<h2 id="代理流量"><a href="#代理流量" class="headerlink" title="代理流量"></a>代理流量</h2><p>在系统里配置了代理却抓不到包，很有可能是因为APP有限制，禁止流量走代理。因为我是在模拟器上安装了这个APP，因此想到了强行代理这个模拟器的流量，看看会怎样。</p>
+<p>测试中用的是<code>雷电模拟器</code>，流量转发用的是<code>Proxifier</code>。因此在<code>Proxifier</code>中配置需要拦截流量的进程名为<code>LdBoxHeadless.exe</code>的进程，来强行转发流量到我们的Burp上：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409202521746.png" alt="image-20200409202521746"></p>
+<p>转发成功，现在尝试一下请求，比如找回密码功能，点击“完成”后，返回的提示竟然是“网络连接失败”？？？</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409202728285.png" alt="image-20200409202728285"></p>
+<p>同时，Burp收到警告，提示<code>Failed to negotiate a TLS connect to xxx</code>，表示HTTPS握手过程失败。</p>
+<p>好吧，果然是限制了流量同时也校验了证书。</p>
+<h2 id="查看日志"><a href="#查看日志" class="headerlink" title="查看日志"></a>查看日志</h2><p>既然发生了错误，那应该会有相应的报错日志，看看能不能从日志里看出点端倪。</p>
+<p>进入<code>adb shell</code>，先输入<code>ps</code>命令查看对应进程的pid，比如这里是 <code>2035</code> ，在用<code>logcat | grep 2035</code>来过滤出该进程的日志即可。</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410143906742.png" alt="image-20200410143906742"></p>
+<p>此时再点击完成按钮，提示“网络连接失败”，查看logcat打出来的日志，发现了证书错误的信息：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144046644.png" alt="image-20200410144046644"></p>
+<h2 id="反编译dex"><a href="#反编译dex" class="headerlink" title="反编译dex"></a>反编译dex</h2><p>看到相关的报错日志，如果有反编译出来的伪代码，看看能不能搜到相关报错的日志的语句来定位到相关代码段，顺藤摸瓜找到校验的函数，再去Hook岂不美滋滋~</p>
+<p>先尝试一下反编译，来看看是不是被混淆过。解压<code>apk</code>，使用<code>dex2jar</code>将<code>classes.dex</code>转换成<code>.jar</code>格式，再用<code>Java Decompiler</code>查看。看到包名的时候，发现它确实进行了混淆。</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409201406531.png" alt="image-20200409201406531"></p>
+<p>但是并没有看到和常见的 HTTP 相关的组件（比如<code>OKHttp3</code>）相关的包。</p>
+<p>将报错日志的部分拆成关键词来搜索也完全搜不到相关的地方，非常让人怀疑实际上这部分逻辑就没写在Java层，很有可能在so里。</p>
+<h2 id="分析so"><a href="#分析so" class="headerlink" title="分析so"></a>分析so</h2><p>既然如此，进入apk包中的lib文件夹，看看它加载的so里有没有什么特别之处。从so文件的大小和名称中，第一眼就识别到了<code>libIPCAppContextJNI.so</code>文件。果断拖到ida中看看里面有什么。</p>
+<p>在ida中加载完之后，果断的打开Strings Window来暴搜字符串。输入<code>verify error:num</code>，看看我发现了什么！</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144726512.png" alt="image-20200410144726512"></p>
+<p>跟进这个字符串的调用，F5，顺利找到打出这句日志的代码：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144929216.png" alt="image-20200410144929216"></p>
+<p>但是，这个函数是一个回调函数，函数名为<code>TPSSLManager::SSLCtxVerifyCallback</code>，追踪它的调用也没有找到有验证证书相关的操作，似乎又陷入僵局……</p>
+<p>因为对证书校验的实现不是很熟悉，打破僵局的方法只能求助于度娘。看到那句日志打印的上一行<code>X509_verify_cert_error_string</code>函数，抱着死马当活马医的心态，扔进搜索引擎，竟然搜到了一堆OPENSSL的证书校验的示例代码！</p>
+<p>通过示例代码的注释，发现OPENSSL校验证书的函数名为<code>X509_verify_cert</code>，回到ida里搜了一下，Bingo！</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410150004769.png" alt="image-20200410150004769"></p>
+<p>跟进这个函数被调用的地方看了下，和示例代码一样，都是在用<code>if</code>语句在判断这个函数的返回值是1还是0，那初步确认证书校验的点就在此处。</p>
+<h2 id="Frida-Hook"><a href="#Frida-Hook" class="headerlink" title="Frida Hook"></a>Frida Hook</h2><p>由于测试是在雷电模拟器里做的，因此需要下载并运行x86版本的<code>Frida-server</code>。给萌新的一个小提示：Frida运行需要关闭SELinux，可以在adb shell中输入<code>setenforce 0</code>来关闭它。</p>
+<h3 id="确认函数地址"><a href="#确认函数地址" class="headerlink" title="确认函数地址"></a>确认函数地址</h3><p>在写JS脚本之前，先使用Frida的命令行来确认一下要Hook的模块和函数是否可用（个人觉得这样便于调试）。在PC端的命令行输入<code>frida -U com.tplink.ipc</code>连接.</p>
+<p>进入后输入<code>Module.findExportByName(&quot;libIPCAppContextJNI.so&quot;, &quot;X509_verify_cert&quot;)</code>应该能打印出<code>X509_verify_cert</code>函数的入口地址，但是竟然返回的是<code>null</code>。此时有点慌了，难道我的判断出错了吗？</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410151702592.png" alt="image-20200410151702592"></p>
+<p>果断使用<code>Process.enumerateModules()</code>命令，会在命令行中打印出所有的模块（即加载的so），找了一下发现也没有<code>libIPCAppContextJNI.so</code>，甚至路径几乎都是<code>/system/lib</code>这样系统路径下的文件。</p>
+<p>在这里我卡了很久，搜了很多文章，都没有发现问题出在哪了，简直一度就要放弃了，直到我想要不要换真机试一下……简直峰回路转！全都成功了，顺利打印出地址：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410151802418.png" alt="image-20200410151802418"></p>
+<h3 id="脚本编写-amp-Hook"><a href="#脚本编写-amp-Hook" class="headerlink" title="脚本编写 &amp; Hook"></a>脚本编写 &amp; Hook</h3><p>接下来就可以编写JS代码来进行Hook了，代码内容也很简单，就是修改这个函数的返回值，让它永远等于1即可：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">Java.perform(<span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    <span class="keyword">var</span> nativePointer = Module.findExportByName(<span class="string">&quot;libIPCAppContextJNI.so&quot;</span>, <span class="string">&quot;X509_verify_cert&quot;</span>);</span><br><span class="line">    <span class="built_in">console</span>.log(<span class="string">&quot;-------------Start-------------&quot;</span>);</span><br><span class="line">    Interceptor.attach(nativePointer, &#123;</span><br><span class="line">        onEnter: <span class="function"><span class="keyword">function</span>(<span class="params">args</span>)</span>&#123;</span><br><span class="line">            <span class="comment">// 此处是修改入参要做的逻辑，在这里不需要修改，留空即可</span></span><br><span class="line">        &#125;,</span><br><span class="line">        onLeave: <span class="function"><span class="keyword">function</span>(<span class="params">retval</span>)</span>&#123;</span><br><span class="line">            <span class="built_in">console</span>.log(<span class="string">&quot;----------leaving-------------&quot;</span>)</span><br><span class="line">            <span class="comment">// 打印原始的返回值</span></span><br><span class="line">            <span class="built_in">console</span>.log(retval);</span><br><span class="line">            <span class="comment">// replace修改返回值</span></span><br><span class="line">            retval.replace(<span class="number">0x1</span>)</span><br><span class="line">            <span class="comment">// 再次打印出来验证一下修改是否成功</span></span><br><span class="line">            <span class="built_in">console</span>.log(retval);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>把这个文件保存，我命名为<code>hook.js</code>。开启Frida，在忘记密码那里点几下：</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">(frida) pentest@DESKTOP<span class="literal">-2AE07FJ</span>:~/frida<span class="variable">$</span> frida <span class="literal">-U</span> com.tplink.ipc <span class="literal">-l</span> hook.js</span><br><span class="line">     ____</span><br><span class="line">    / _  |   Frida <span class="number">12.8</span>.<span class="number">17</span> - A world<span class="literal">-class</span> dynamic instrumentation toolkit</span><br><span class="line">   | (_| |</span><br><span class="line">    &gt; _  |   Commands:</span><br><span class="line">   /_/ |_|       help      -&gt; Displays the help system</span><br><span class="line">   . . . .       object?   -&gt; Display information about <span class="string">&#x27;object&#x27;</span></span><br><span class="line">   . . . .       <span class="keyword">exit</span>/quit -&gt; <span class="keyword">Exit</span></span><br><span class="line">   . . . .</span><br><span class="line">   . . . .   More info at https://www.frida.re/docs/home/</span><br><span class="line">Attaching...</span><br><span class="line">------------<span class="literal">-Start</span>-------------</span><br><span class="line">[<span class="type">MI</span> <span class="number">5</span><span class="type">s</span>::<span class="type">com.tplink.ipc</span>]-&gt; ---------<span class="literal">-leaving</span>-------------</span><br><span class="line"><span class="number">0</span>x1</span><br><span class="line"><span class="number">0</span>x1</span><br></pre></td></tr></table></figure>
+
+<p>Nice！成功Hook到并打印了返回值。</p>
+<h2 id="配置代理"><a href="#配置代理" class="headerlink" title="配置代理"></a>配置代理</h2><p>到这一步，已经接近成功了，但是在系统里设置代理之后它并不会走，判断应该是做了代理上的限制，导致APP的流量不跟随代理。</p>
+<p>那这一步的目标，就是让APP的流量顺利走到PC的Burpsuite上，来帮助我们进行分析。</p>
+<p>第一种思路自然是找出限制代理的部分，一并Hook掉，但是我实在是不想再去找了，于是果断放弃；</p>
+<p>第二种思路是通过无线网卡共享一个热点，再配置转发达到抓包的目的。这种方法在Windows系统下配置很麻烦，放弃；</p>
+<p>第三种思路是PC端配置反向代理，手机端通过修改<code>hosts</code>文件强行转流量，因为之前的测试中配置过，且配置也简单（就是操作步骤有点复杂，好在环境都在），就果断用了。</p>
+<p>反向代理是要配置证书的，但是因为Hook掉了校验，所以配置什么证书也无所谓了~</p>
+<h3 id="配置Hosts"><a href="#配置Hosts" class="headerlink" title="配置Hosts"></a>配置Hosts</h3><p>配置hosts文件需要知道域名，在分析校验的部分看到了对于<code>*.tplinkcloud.com.cn</code>域名的校验。因此再次用Strings暴搜：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410160228733.png" alt="image-20200410160228733"></p>
+<p>因为考虑到可能不同的功能会访问不同的域名，为了方便起见，一次性把这些域名都添加到<code>hosts</code>文件里。</p>
+<p>在修改<code>hosts</code>文件的时候，需要注意编写的格式。可以先通过<code>adb pull /etc/hosts</code>将原始的hosts文件下载到PC，再在这个基础上修改。在“回车”符号上一定要注意，Android只识别<code>\n</code>而无法识别<code>\r\n</code>，因此在编辑的时候一定要注意回车符。</p>
+<p>我使用的是<code>Notepad++</code>来进行编辑，注意右下角：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410160643053.png" alt="image-20200410160643053"></p>
+<p>如果不是LF的话，可以双击这个位置选择“转换为Unix格式”即可。</p>
+<p>编辑完后再<code>adb push</code>回原位并重启即可生效。</p>
+<h3 id="开始抓包！"><a href="#开始抓包！" class="headerlink" title="开始抓包！"></a>开始抓包！</h3><p>终于在经过无数失败之后，可以开始抓包了。</p>
+<p>如果以上步骤都配置正确的话，此时打开APP，在PC上输入命令<code>frida -U com.tplink.ipc -l hook.js</code>后，点击相应的按钮，在命令行里会出现一串这样的输出：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410161021863.png" alt="image-20200410161021863"></p>
+<p>每一个输出都代表一个请求的证书校验被绕过了。</p>
+<p>打开Burpsuite，终于能看到熟悉的请求了：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410161204206.png" alt="image-20200410161204206"></p>
+<p>接下来就可以尽情的发挥脑洞开始测试了！</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>整个思路其实非常简单，主要是这个APP没有进行过加固，分析起来比较方便，so的函数名都很全，所以在分析这一步中并没有太大难度。总体思路总结如下：</p>
+<ol>
+<li>通过反编译等方式确定证书绑定的核心函数的位置</li>
+<li>使用Frida对该核心函数进行Hook</li>
+<li>如果遇到无法代理的情况，嫌麻烦可以用反向代理的方式抓包</li>
+</ol>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%90%86%E6%B5%81%E9%87%8F"><span class="toc-text">代理流量</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E7%9C%8B%E6%97%A5%E5%BF%97"><span class="toc-text">查看日志</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E7%BC%96%E8%AF%91dex"><span class="toc-text">反编译dex</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E6%9E%90so"><span class="toc-text">分析so</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Frida-Hook"><span class="toc-text">Frida Hook</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A1%AE%E8%AE%A4%E5%87%BD%E6%95%B0%E5%9C%B0%E5%9D%80"><span class="toc-text">确认函数地址</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%84%9A%E6%9C%AC%E7%BC%96%E5%86%99-amp-Hook"><span class="toc-text">脚本编写 &amp; Hook</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E4%BB%A3%E7%90%86"><span class="toc-text">配置代理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E7%BD%AEHosts"><span class="toc-text">配置Hosts</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%80%E5%A7%8B%E6%8A%93%E5%8C%85%EF%BC%81"><span class="toc-text">开始抓包！</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2020/03/31/Python3%E7%8E%AF%E5%A2%83%E4%B8%8B%E7%9A%84Brida%E6%8F%92%E4%BB%B6%E9%85%8D%E7%BD%AE/" rel="next" title="Brida 不完全折腾手册">
+          Brida 不完全折腾手册
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/" rel="prev" title="使用Python搭建反向代理分析IoT设备流量">
+            使用Python搭建反向代理分析IoT设备流量
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

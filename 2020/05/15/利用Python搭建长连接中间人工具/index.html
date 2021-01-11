@@ -1,0 +1,377 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="Python,MitM,Proxy," />
+  
+
+  
+    <meta name="description" content="利用Python搭建长连接中间人工具分析流量" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>利用Python搭建长连接中间人工具分析流量 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        利用Python搭建长连接中间人工具分析流量
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2020-05-15T08:03:29.000Z">
+        2020-05-15
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/MitM/" rel="tag">MitM</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Proxy/" rel="tag">Proxy</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Python/" rel="tag">Python</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 27 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>使用Burpsuite或者Fiddler等工具做HTTP代理分析流量是渗透测试的基操，对于测试Web Application或者API接口效果都很好。但是，Burpsuite无法正确处理HTTP长连接(持久连接)，即头部字段Connection: Alive的情况。</p>
+<a id="more"></a>
+
+<p>书继续接上文。在愉快的搭建了反向代理展开一系列测试之后，当我测试某台IoT设备的时候，Burpsuite中收到了一个异形数据包，且设备无法正常联网，开启代理之后过一会儿就显示设备离线。</p>
+<p>这个数据包是在设备尝试登录云平台的时候，请求<code>/login</code>时发生的：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200515161731104.png" alt="image-20200515161731104"></p>
+<p>从Response可以看出，这个请求的响应似乎是三个数据包叠在一起了，一个是正常的Response，紧接着是两个连续的POST请求。</p>
+<p>但是，在Python的<code>Requests</code>模块在处理Response的时候，会通过头部的<code>Content-Length</code>字段对后面的Body部分进行裁剪，导致Burpsuite部分看到的响应与实际从Python反向代理发出的不一致（实际发出的时候后面两个POST请求直接被删掉了）。</p>
+<p>分析到这里，我初步认为是Python在处理异形Response的时候没有带上后续的请求，导致设备无法接收到预期的数据从而无法进行后续的通信。</p>
+<h2 id="使用自定义字符串验证"><a href="#使用自定义字符串验证" class="headerlink" title="使用自定义字符串验证"></a>使用自定义字符串验证</h2><p>既然如此，在解决这个问题之前，需要先验证想法是否正确。既然<code>HTTPServer</code>无法处理，且每次回复的内容都是固定的，那先尝试用<strong>自定义的字符串</strong>作为Response来进行回复，绕过<code>HTTPServer</code>的解析（代理部分的完整代码请参见上一篇文章）：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518102743490.png" alt="image-20200518102743490"></p>
+<p>先用Burpsuite尝试一下，看看回复是否正确：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518103302446.png" alt="image-20200518103302446"></p>
+<p>与之前抓包的内容一致。</p>
+<p>开启设备，本以为可以正常了，结果发现设备端不断的在发送Login请求，而且没有任何后续的请求到达，那么说明设备端并没有认这个回复。</p>
+<p>折腾了许久也没想明白到底是怎么回事，毕竟响应包里并没有什么认证信息，暂时排除认证失败导致的设备响应异常，直到无意间用Wireshark抓了一下包之后发现了其中的秘密：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518143904406.png" alt="image-20200518143904406"></p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518143827391.png" alt="image-20200518143827391"></p>
+<p>先分析本机的抓包结果，可以很明显的看到一个完整的TCP交互过程，从三次握手开始，然后是协商TLS的密钥，再传输数据，最后四次挥手断开连接。数据传输阶段，也只是有三个<code>Application Data</code>包进行了传输。</p>
+<p>而分析路由器上抓包结果，设备端在三次握手建立连接、TLS协商后，有着大量的数据包交互，显然整个流程上与代理部分完全不同。</p>
+<h2 id="检查协议头"><a href="#检查协议头" class="headerlink" title="检查协议头"></a>检查协议头</h2><p>再次回头去看请求中的内容，在头部的<code>Connection</code>字段中发现了端倪。回到Burpsuite中那个“异形”数据包。可以看到在Response的部分中，头部的<code>Connection</code>字段的值为<code>Keep-Alive</code>：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200519095658256.png" alt="image-20200519095658256"></p>
+<p>一般情况下，这个值是<code>Close</code>，如访问百度首页的请求中，Request和Response中的值：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518145409550.png" alt="image-20200518145409550"></p>
+<p>而这个“异形”数据包里的<code>Keep-Alive</code>就显得有点与众不同。</p>
+<p>通过度娘初步得知，<code>Connection: Keep-Alive</code>是长连接建立的标志，而在**<a target="_blank" rel="noopener" href="https://tools.ietf.org/html/rfc2616">RFC2616</a>**的第8章中对长连接有详细的描述。实际上这种头部定义的连接应该叫做持久连接（Persistent Connection），即建立一次TCP连接后，利用该连接进行多次通信，减少建立TCP连接产生的负载。</p>
+<blockquote>8.1.1 Purpose<br>
+    Prior to persistent connections, a separate TCP connection was<br>
+    established to fetch each URL, increasing the load on HTTP servers<br>
+    and causing congestion on the Internet. The use of inline images and<br>
+    other associated data often require a client to make multiple<br>
+    requests of the same server in a short amount of time.<br>
+    <br>
+    在持久连接出现之前，每次请求URL时都会建立一个单独的TCP连接，(这种做法)增加了HTTP服务器的负载，并造成Internet的拥塞。<br>
+    在使用内联图片及其他相关数据时，客户端需要在短时间内向同一个服务端发起多次请求。
+
+<p>在Wikipedia上，我们常说的“短连接”和“长连接”的示意图如下（可能翻译成“多次连接”和“持久连接”会更贴近原意）：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7%5C1920px-HTTP_persistent_connection.svg.png"></p>
+<p>但是，需要注意的是，虽然是允许在同一个TCP连接中传输多次数据，但模式仍是客户端发起、服务端响应，服务端并不能直接向客户端发送数据。</p>
+<h2 id="WebSocket与持久连接"><a href="#WebSocket与持久连接" class="headerlink" title="WebSocket与持久连接"></a>WebSocket与持久连接</h2><p>从路由器抓包的内容，以及文章开头提及的那个“异形”数据包来看，似乎设备与服务端的通信并不是单纯的设备端请求、服务端应答的模式，而更偏向于全双工的形式，即服务端也能向设备端主动发送数据。这里乍看起来很像WebSocket(引用自Wikipedia)：</p>
+<blockquote>WebSocket 是独立的、创建在TCP上的协议。<br>
+Websocket 通过 HTTP/1.1 协议的101状态码进行握手。<br>
+为了创建Websocket连接，需要通过浏览器发出请求，之后服务器进行回应，这个过程通常称为“握手”（Handshaking）。</blockquote>
+
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518153422059.png" alt="image-20200518153422059"></p>
+<p>而实际从代理中看到的那个“异形”数据并没有<code>Upgrade</code>头部，且<code>Connection</code>字段也不是Upgrade，那么并不是标准的WebSocket协议。</p>
+<h2 id="编写工具"><a href="#编写工具" class="headerlink" title="编写工具"></a>编写工具</h2><p>经过一系列分析，现在能确定的是：</p>
+<ol>
+<li>这个设备在与服务器通信的时候使用的是一个TCP连接传输多次数据</li>
+<li>设备端并非只进行Response，而是有主动发送数据的能力</li>
+<li>协议用的仍是基于HTTP的协议，而不是WebSocket</li>
+</ol>
+<p>那么我们需要该工具能处理<strong>长连接（持久连接）</strong>，在设备侧和服务器侧均保持连接的状态，且根据双方的情况选择建立或断开连接。即任意一方在断开连接后，工具能正确关闭另一侧的连接（工具处理流量的拓扑图参见上一篇文章中的图）。</p>
+<p>作为中间人工具，无需对请求进行处理，如判断URL，判断Method等，只需要单纯的转发即可，因此可以不用HTTP框架，直接用Socket来处理到达的TCP连接并转发。</p>
+<p>起初打算用线程的方式来完成对两端的连接管理，一条线程负责监听设备端发送来的数据，并发送给客户端；另一条线程负责监听服务端发送的数据并转发给客户端：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518160456346.png" alt="image-20200518160456346"></p>
+<p>但是，直接设置线程在管理上会比较麻烦，当客户端主动断开连接时，需要通知另一线程关闭；此时还需要判断当前线程对应的另一线程中的Socket是哪一个，涉及到线程之间交互，要动用队列等，较为麻烦。</p>
+<p>使用Python的<code>select.epoll</code>可以进行异步I/O操作，正好适用于当前的场景。epoll是一种异步I/O模型，允许以非阻塞的模式处理I/O，如TCP连接。在代码逻辑上与线程的方式最直观的区别，就是它会等待Socket连接活动，并触发事件，利用epoll提供的FD来表示当前处理的Socket连接是哪一个，对于管理服务端和客户端的连接都非常方便。</p>
+<p>核心代码如下：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 解析到达的HTTP请求</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">get_info</span>(<span class="params">request</span>):</span></span><br><span class="line">    <span class="keyword">if</span> <span class="string">&#x27;\r\n\r\n&#x27;</span> <span class="keyword">in</span> request:</span><br><span class="line">        [req_list, body] = request.split(<span class="string">&#x27;\r\n\r\n&#x27;</span>)</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        req_list = request</span><br><span class="line">        body = <span class="string">&#x27;&#x27;</span></span><br><span class="line">    req_list = req_list.split(<span class="string">&#x27;\r\n&#x27;</span>)</span><br><span class="line">    <span class="keyword">if</span> len(req_list) &gt; <span class="number">1</span>:</span><br><span class="line">        info = req_list[<span class="number">0</span>]</span><br><span class="line">        req_list.remove(req_list[<span class="number">0</span>])</span><br><span class="line">        headers = &#123;&#125;</span><br><span class="line">        <span class="keyword">for</span> item <span class="keyword">in</span> req_list:</span><br><span class="line">            header = item.split(<span class="string">&#x27;: &#x27;</span>)</span><br><span class="line">            headers[header[<span class="number">0</span>]] = header[<span class="number">1</span>]</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;request&quot;</span>: info,</span><br><span class="line">                <span class="string">&quot;headers&quot;</span>: headers,</span><br><span class="line">                <span class="string">&quot;body&quot;</span>: body&#125;</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">False</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">main</span>():</span></span><br><span class="line">    port = <span class="number">443</span></span><br><span class="line">    context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 载入证书文件</span></span><br><span class="line">    certfile = <span class="string">&#x27;./conf/cert.crt&#x27;</span></span><br><span class="line">    keyfile = <span class="string">&#x27;./conf/cert.key&#x27;</span></span><br><span class="line">    context.load_cert_chain(certfile, keyfile)</span><br><span class="line">    print(<span class="string">&quot;Loading cert files:&quot;</span>, certfile, keyfile)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 建立Socket监听客户端请求</span></span><br><span class="line">    SOCK = socket.socket(socket.AF_INET, socket.SOCK_STREAM)</span><br><span class="line">    SOCK.bind((<span class="string">&quot;0.0.0.0&quot;</span>, port))</span><br><span class="line">    SOCK.listen(<span class="number">100</span>)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 设置证书</span></span><br><span class="line">    tcp_server_socket = context.wrap_socket(SOCK, server_side=<span class="literal">True</span>)</span><br><span class="line">    tcp_server_socket.setblocking(<span class="literal">False</span>)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 启用epoll</span></span><br><span class="line">    epl = select.epoll()</span><br><span class="line">    epl.register(tcp_server_socket.fileno(), select.EPOLLIN)</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 连接池，用来管理连接</span></span><br><span class="line">    fd_event_dict = dict()</span><br><span class="line">    </span><br><span class="line">    <span class="comment"># 主循环</span></span><br><span class="line">    <span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">        fd_event_list = epl.poll()</span><br><span class="line">        <span class="keyword">for</span> fd, event <span class="keyword">in</span> fd_event_list:</span><br><span class="line">            </span><br><span class="line">            <span class="comment"># 当新连接到达</span></span><br><span class="line">            <span class="keyword">if</span> fd == tcp_server_socket.fileno():</span><br><span class="line">                <span class="comment"># 建立连接</span></span><br><span class="line">                new_socket, client_addr = tcp_server_socket.accept()</span><br><span class="line">                <span class="comment"># 在epoll中注册</span></span><br><span class="line">                epl.register(new_socket.fileno(), select.EPOLLIN)</span><br><span class="line">                <span class="comment"># 加入连接池</span></span><br><span class="line">                fd_event_dict[new_socket.fileno()] = [new_socket, <span class="literal">None</span>]</span><br><span class="line">            <span class="comment"># 当有数据读入</span></span><br><span class="line">            <span class="keyword">elif</span> event == select.EPOLLIN:</span><br><span class="line">                <span class="comment"># 接收数据（Bytes）</span></span><br><span class="line">                <span class="keyword">try</span>:</span><br><span class="line">                    recv_data = fd_event_dict[fd][<span class="number">0</span>].recv(<span class="number">4096</span>).decode(<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line">                    <span class="comment"># 若有数据接收到</span></span><br><span class="line">                    <span class="keyword">if</span> recv_data:</span><br><span class="line">                        <span class="comment"># 判断当前这个fd有没有建立对端</span></span><br><span class="line">                        <span class="comment"># 一般情况下是设备端（客户端）发起连接，此处检查有没有与服务端建立连接</span></span><br><span class="line">                        <span class="keyword">if</span> fd_event_dict[fd][<span class="number">1</span>] <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">                            <span class="comment"># 解析HTTP请求</span></span><br><span class="line">                            info = get_info(recv_data)</span><br><span class="line">                            <span class="comment"># 读取请求里的Host字段</span></span><br><span class="line">                            host = info[<span class="string">&quot;headers&quot;</span>][<span class="string">&quot;Host&quot;</span>].split(<span class="string">&quot;:&quot;</span>)[<span class="number">0</span>]</span><br><span class="line">                            <span class="comment"># 建立新连接</span></span><br><span class="line">                            new_socket = ssl.wrap_socket(socket.socket())</span><br><span class="line">                            new_socket.connect((host, port))</span><br><span class="line">                            <span class="comment"># 注册</span></span><br><span class="line">                            epl.register(new_socket.fileno(), select.EPOLLIN)</span><br><span class="line">                            <span class="comment"># 将这个fd写入当前连接的字典中</span></span><br><span class="line">                            fd_event_dict[fd] = (fd_event_dict[fd][<span class="number">0</span>], new_socket.fileno())</span><br><span class="line">                            <span class="comment"># 添加一个新的项</span></span><br><span class="line">                            fd_event_dict[new_socket.fileno()] = (new_socket, fd)</span><br><span class="line">                        <span class="comment"># 如果有建立对端，则直接发送</span></span><br><span class="line">                        <span class="comment"># socket.getpeername(): 返回发送方的IP地址和端口</span></span><br><span class="line">                        peer_fd = fd_event_dict[fd][<span class="number">1</span>]</span><br><span class="line">                        </span><br><span class="line">                        <span class="comment"># 打印信息</span></span><br><span class="line">                        print(<span class="string">&quot;\n&quot;</span> + <span class="string">&quot;-&quot;</span> * <span class="number">20</span>)</span><br><span class="line">                        print(<span class="string">&quot;From: %s, To: %s, fd: %s&quot;</span> % (fd_event_dict[fd][<span class="number">0</span>].getpeername()[<span class="number">0</span>], fd_event_dict[peer_fd][<span class="number">0</span>].getpeername()[<span class="number">0</span>], fd))</span><br><span class="line">                        print(<span class="string">&quot;\n&quot;</span> + recv_data + <span class="string">&quot;\n&quot;</span> + <span class="string">&quot;-&quot;</span> * <span class="number">20</span>)</span><br><span class="line">                        </span><br><span class="line">                        <span class="comment"># 发送数据</span></span><br><span class="line">                        fd_event_dict[peer_fd][<span class="number">0</span>].send(recv_data.encode())</span><br><span class="line">                    <span class="comment"># 没有数据则表示连接断开</span></span><br><span class="line">                    <span class="keyword">else</span>:</span><br><span class="line">                        <span class="comment"># 关闭对端socket并反注册</span></span><br><span class="line">                        peer_fd = fd_event_dict[fd][<span class="number">1</span>]</span><br><span class="line">                        <span class="keyword">if</span> peer_fd:</span><br><span class="line">                            fd_event_dict[peer_fd][<span class="number">0</span>].close()</span><br><span class="line">                            epl.unregister(peer_fd)</span><br><span class="line">                            <span class="keyword">del</span> fd_event_dict[peer_fd]</span><br><span class="line">                        <span class="comment"># 关闭当前socket</span></span><br><span class="line">                        fd_event_dict[fd][<span class="number">0</span>].close()</span><br><span class="line">                        <span class="comment"># 反注册</span></span><br><span class="line">                        epl.unregister(fd)</span><br><span class="line">                        <span class="comment"># 删除记录</span></span><br><span class="line">                        <span class="keyword">del</span> fd_event_dict[fd]</span><br><span class="line"></span><br><span class="line">                <span class="comment"># 错误处理</span></span><br><span class="line">                <span class="keyword">except</span> ssl.SSLError <span class="keyword">as</span> e:</span><br><span class="line">                    <span class="comment"># 关闭对端socket并反注册</span></span><br><span class="line">                    peer_fd = fd_event_dict[fd][<span class="number">1</span>]</span><br><span class="line">                    <span class="keyword">if</span> peer_fd:</span><br><span class="line">                        fd_event_dict[peer_fd][<span class="number">0</span>].close()</span><br><span class="line">                        epl.unregister(peer_fd)</span><br><span class="line">                        <span class="keyword">del</span> fd_event_dict[peer_fd]</span><br><span class="line">                    <span class="comment"># 关闭当前socket</span></span><br><span class="line">                    fd_event_dict[fd][<span class="number">0</span>].close()</span><br><span class="line">                    <span class="comment"># 反注册</span></span><br><span class="line">                    epl.unregister(fd)</span><br><span class="line">                    <span class="comment"># 删除记录</span></span><br><span class="line">                    <span class="keyword">del</span> fd_event_dict[fd]</span><br><span class="line">                    print(<span class="string">&quot;SSL Error&quot;</span>, len(fd_event_dict), e)</span><br><span class="line">                <span class="keyword">except</span> OSError <span class="keyword">as</span> e:</span><br><span class="line">                    print(<span class="string">&quot;OS Error&quot;</span>, len(fd_event_dict))</span><br></pre></td></tr></table></figure>
+
+<p>代码质量不是很高，因为也是临时测试用，就没有优化，大神勿喷~</p>
+<h2 id="实战演示"><a href="#实战演示" class="headerlink" title="实战演示"></a>实战演示</h2><p>在实战之前需要指出，epoll仅在Linux系统环境下支持，在Windows下Python会提示<code>AttributeError: module &#39;select&#39; has no attribute &#39;epoll&#39;</code>。解决方法有两个：</p>
+<p>一是用虚拟机，缺点是网络上可能不好设置，有些网络状况没法选桥接；二是如果是Windows 10系统，可以通过安装WSL(Windows Linux Subsystem)来解决。WSL在文件和网络接口上与Windows都是共用的，但是可以运行Linux程序，非常好用，安装也比较便捷，随便搜索一下都有一大把教程，安装和使用在此不再赘述。</p>
+<p>提示：在Linux环境下操作网络需要管理员权限，因此需要加<code>sudo</code>命令，否则会报错！</p>
+<h3 id="DNS欺骗"><a href="#DNS欺骗" class="headerlink" title="DNS欺骗"></a>DNS欺骗</h3><p>在查看之前，需要先引导流量到本机上，因此需要DNS欺骗。方法仍是利用极路由插件设置，将目标域名的IP设置成本机IP即可。</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200518164513484.png" alt="image-20200518164513484"></p>
+<p>这里说明一下，一般来说访问网络连接都会用域名的形式，但如果测试目标头很铁就是要用IP的方式，那么DNS欺骗就没用了（都没解析DNS骗啥！），这时候只能选择ARP攻击，将流量引导到本机，再设置iptables端口转发。</p>
+<p><strong>另外一个要说明的地方，如果在路由器上做DNS欺骗，PC和被测目标都会被欺骗（这就是传说中的“连自己都骗”吗），因此需要在PC端手动修改Hosts文件来避免自己被欺骗从而无法正常将数据转发出去。</strong>以上图中的<code>www.bbb.com</code>为例，在本机的hosts文件中添加真实解析：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200519091131549.png" alt="image-20200519091131549"></p>
+<p>此外，如果你使用的是WSL，那么需要在WSL中修改而不是Windows中。</p>
+<blockquote>
+<p>DNS解析顺序：</p>
+<p>本地缓存 &gt; Hosts文件 &gt; 路由器DNS &gt; ISP DNS服务器</p>
+</blockquote>
+<h3 id="流量监听"><a href="#流量监听" class="headerlink" title="流量监听"></a>流量监听</h3><p>设置好DNS欺骗之后，重启目标设备，此时设备会请求目标域名的DNS，路由器会回复我们设置的值（即本机IP），此时流量是发往PC端的，再由Python进行转发到真实服务器：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200519092531330.png" alt="image-20200519092531330"></p>
+<p>打开工具，等待设备连接（如果设备流量没走工具转发，可以尝试重启设备以清空DNS缓存），即可在控制台看到流量信息：</p>
+<p><img src="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/image-20200519093541545.png" alt="image-20200519093541545"></p>
+<p>这里可以明显看到从服务端推送过来的数据，也和之前在Wireshark中查看的内容吻合。</p>
+<p>接下来即可在原来的代码基础上，对数据发送的部分进行魔改，来完成篡改、伪造消息的操作。因为这部分代码定制化较高，且写的不完善，在此就不放出了，大家可以各显神通来完成这部分逻辑。</p>
+</blockquote>
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E8%87%AA%E5%AE%9A%E4%B9%89%E5%AD%97%E7%AC%A6%E4%B8%B2%E9%AA%8C%E8%AF%81"><span class="toc-text">使用自定义字符串验证</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E5%8D%8F%E8%AE%AE%E5%A4%B4"><span class="toc-text">检查协议头</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#WebSocket%E4%B8%8E%E6%8C%81%E4%B9%85%E8%BF%9E%E6%8E%A5"><span class="toc-text">WebSocket与持久连接</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E5%86%99%E5%B7%A5%E5%85%B7"><span class="toc-text">编写工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E6%BC%94%E7%A4%BA"><span class="toc-text">实战演示</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DNS%E6%AC%BA%E9%AA%97"><span class="toc-text">DNS欺骗</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E9%87%8F%E7%9B%91%E5%90%AC"><span class="toc-text">流量监听</span></a></li></ol></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/" rel="next" title="使用Python搭建反向代理分析IoT设备流量">
+          使用Python搭建反向代理分析IoT设备流量
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/" rel="prev" title="Wi-Fi攻击方式简述">
+            Wi-Fi攻击方式简述
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

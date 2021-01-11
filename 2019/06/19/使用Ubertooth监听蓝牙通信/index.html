@@ -1,0 +1,434 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="蓝牙," />
+  
+
+  
+    <meta name="description" content="使用Ubertooth监听蓝牙通信" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>使用Ubertooth监听蓝牙通信 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        使用Ubertooth监听蓝牙通信
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2019-06-19T02:06:05.000Z">
+        2019-06-19
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%93%9D%E7%89%99/" rel="tag">蓝牙</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 20 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>作为没有使用过Ubertooth的小白，尝试从零开始搭建Ubertooth的环境，相关配置、依赖，来进行蓝牙数据的监听，配合Wireshark，进行蓝牙数据监听和分析。</p>
+<a id="more"></a>
+
+<h1 id="环境说明"><a href="#环境说明" class="headerlink" title="环境说明"></a>环境说明</h1><ul>
+<li><p>VMWare版本：14.0.0 build-6661328</p>
+</li>
+<li><p>操作系统：Ubuntu 14.04.5 LTS</p>
+</li>
+<li><p>Ubertooth软件版本：ubertooth 2018-12-R1</p>
+</li>
+<li><p>Libbtbb版本：libbtbb 2018-12-R1</p>
+</li>
+<li><p>Wireshark版本： Version 2.6.6 (Git v2.6.6 packaged as 2.6.6-1~ubuntu14.04.0)</p>
+</li>
+</ul>
+<p>本次编译安装的目的，是能够借助Wireshark去查看和分析监听到的蓝牙数据包，因此需要2个部分：Ubertooth（应用程序本体）和libbtbb（蓝牙基带库，源码中带有Wireshark插件）</p>
+<p>实际上还有一部分需要关注，附带在Ubertooth下载的源码里，就是硬件对应的固件。由于固件是和软件配套的，因此在编译软件的时候需要给硬件刷入对应的固件，否则会报api不匹配的问题（下文中会说到）</p>
+<h1 id="软件编译"><a href="#软件编译" class="headerlink" title="软件编译"></a>软件编译</h1><p>软件的编译部分其实很简单，使用Ubuntu系统的话官方git上是有相关说明的，而且很详细，可以傻瓜的照做。下面就简单说明一下。</p>
+<p>首先先给出<a target="_blank" rel="noopener" href="https://github.com/greatscottgadgets/ubertooth/wiki/Build-Guide">官方WiKi (Build-Guide)</a>的链接，如果阅读能力强的可以直接看官方说明，下面的描述都以Ubuntu为例。</p>
+<p>首先安装编译环境，如cmake, gcc等，一条命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install cmake libusb-1.0-0-dev make gcc g++ libbluetooth-dev \</span><br><span class="line">pkg-config libpcap-dev python-numpy python-pyside python-qt4</span><br></pre></td></tr></table></figure>
+
+<h2 id="libbtbb-蓝牙基带库"><a href="#libbtbb-蓝牙基带库" class="headerlink" title="libbtbb(蓝牙基带库)"></a>libbtbb(蓝牙基带库)</h2><p>接下来安装蓝牙基带库（Bluetooth Baseband Library），下载源码并解压，这里也是借用了官方给出的命令，正好我安装的也是2018-12-R1的版本。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">wget https://github.com/greatscottgadgets/libbtbb/archive/2018-12-R1.tar.gz -O libbtbb-2018-12-R1.tar.gz</span><br><span class="line">tar -xf libbtbb-2018-12-R1.tar.gz</span><br></pre></td></tr></table></figure>
+
+<p>如果不用<code>wget</code>命令的话，也可以直接在<a target="_blank" rel="noopener" href="https://github.com/greatscottgadgets/libbtbb/releases">Releases页面</a>上下载（注意版本和文件名哦），然后手动解压~~</p>
+<p>接下来按照官方的说明，<code>cd</code>命令进入解压好的文件夹，使用<code>mkdir</code>命令新建一个名为<code>build</code>的文件夹，用于编译源码。之后就是简单粗暴的<code>make</code>过程。不过注意，最后的<code>make install</code>一定要用<code>sudo</code>去跑（长期用Kali已经忘记还有”以管理员身份运行“这回事了……）完整的命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> libbtbb-2018-12-R1</span><br><span class="line">mkdir build</span><br><span class="line"><span class="built_in">cd</span> build</span><br><span class="line">cmake ..</span><br><span class="line">make</span><br><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
+
+<p>如果没有报错，那就说明安装成功了。下面放出几张我build过程的截图：</p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_135840.png" alt="执行cmake"></p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_135948.png" alt="执行make命令"></p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_140050.png" alt="执行make install"></p>
+<p>根据官方说明，首次安装的时候可能会报错，或者出现找不到lib库的情况，此时则需要在命令行中执行</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo ldconfig</span><br></pre></td></tr></table></figure>
+
+<p>即可，虽然不知道为什么，而且我安装的时候并未出现任何报错的提示。</p>
+<h2 id="Ubertooth工具软件"><a href="#Ubertooth工具软件" class="headerlink" title="Ubertooth工具软件"></a>Ubertooth工具软件</h2><p>Ubertooth工具软件就是指在命令行中输入<code>ubertooth-xxx</code>这样的命令能执行的那个玩意。编译的时候和libbtbb类似，用<code>wget</code>命令或者直接在<a target="_blank" rel="noopener" href="https://github.com/greatscottgadgets/ubertooth/releases">Release页面</a>进行下载，并解压。官方的命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">wget https://github.com/greatscottgadgets/ubertooth/releases/download/2018-12-R1/ubertooth-2018-12-R1.tar.xz</span><br><span class="line">tar xf ubertooth-2018-12-R1.tar.xz</span><br></pre></td></tr></table></figure>
+
+<p>后面的步骤也是一样的，新建build文件夹，在这个文件夹里cmake - make - make install完成安装：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> ubertooth-2018-12-R1/host</span><br><span class="line">mkdir build</span><br><span class="line"><span class="built_in">cd</span> build</span><br><span class="line">cmake ..</span><br><span class="line">make</span><br><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
+
+<div class="tip">
+需要注意的是，这里是在`host`文件夹下进行编译，解压出的源码中还有很多其他的文件夹，注意不要弄错了
+</div>
+
+<p>同样的，这里官方也给了提示，如果首次编译或报找不到lib库的问题，请在命令行中输入：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo ldconfig</span><br></pre></td></tr></table></figure>
+
+<p>至此，基带和工具全部都安装完成了，这时候插上Ubertooth，将其分配给虚拟机，并在命令行中输入<code>ubertooth-util -v</code>即可查看到当前你的Ubertooth的固件版本。</p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_142417.png" alt="查看Ubertooth固件版本"></p>
+<p>这里是我已经刷过了固件，所以显示的版本是2018-12-R1（原来没刷固件之前忘记截图了），能看到固件，说明btbb库和Ubertooth工具都安装成功了。</p>
+<h2 id="Wireshark插件"><a href="#Wireshark插件" class="headerlink" title="Wireshark插件"></a>Wireshark插件</h2><div class="tip">
+<p>2019-06-19 更新:</p>
+<p>
+根据官方libbtbb github的 <a target="_blank" rel="noopener" href="https://github.com/greatscottgadgets/libbtbb/issues/50">issus 50</a>，作者对Wireshark插件的问题进行了回答：
+<ul>
+<li>对于Wireshark 2.0之前的版本，需要编译<code>plugins-legacy</code>中的插件</li>
+<li>对于Wireshark 2.0 ~ 2.2 的版本，需要编译<code>plugins</code>中的插件</li>
+<li>对于Wireshark 2.2+的版本，无需编译任何插件即可，因为Wireshark官方已经自带了相关插件。</li>
+</ul>
+</p>
+</div>
+
+<div class="tip">
+实际上下面所述的插件编译在我本次的流程中是没有成功的，可以直接略过。
+</div>
+
+<p><del>最终目的是要在Wireshark中实时查看到蓝牙监听到的数据包，因此需要Wireshark中的插件的支持。官方在libbtbb的源码压缩包中提供了相关的插件，路径在<code>libbtbb-2018-12-R1/wireshark/plugins/</code>下。2018-12-R1中有两个插件，<code>btbb</code>和<code>btbredr</code>。</del></p>
+<p><del>首先需要安装<code>wireshark</code>。</del></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install wireshark wireshark-dev libwireshark-dev cmake</span><br></pre></td></tr></table></figure>
+
+<p><del>如果你已经安装了，就请忽略这步，并且找到其安装插件的目录。官方给出的默认路径在<code>/usr/lib/x86_64-linux-gnu/wireshark/libwireshark3/plugins</code>下，这也是下面命令中指定插件的安装路径。</del></p>
+<p><del><em>我在编译的时候似乎没有找到这个路径，只找到了<code>/usr/lib/x86_64-linux-gnu/wireshark/</code>。根据官方Wiki的说明，需要找到与<code>asn1.so</code>或<code>ethercat.so</code>所在的路径。我在Ubuntu 14.04中使用<code>sudo apt-get install wireshark</code>命令安装的Wireshark的插件路径是在<code>/usr/lib/x86_64-linux-gnu/wireshark/plugin/2.6</code>这个路径下，所以下面命令中的路径填写我这个虚拟机中的路径，与官方Wiki的命令会有所出入。</em></del></p>
+<p><del><em>我是使用<code>apt-get</code>命令安装的Wireshark，系统自动给我安装的是Wireshark Version 2.6.6 (Git v2.6.6 packaged as 2.6.6-1-ubuntu14.04.0) ，其插件是自动从<code>/usr/lib/x86_64-linux-gnu/wireshark/plugin/2.6</code>中加载的，支持子文件夹，因此我在这个路径下建立了一个文件夹<code>libbtbb</code>专门存放Ubertooth的插件。</em></del></p>
+<p><del>首先安装btbb插件。进入btbb源码所在的路径，建立build文件夹，并指定安装路径(新建了一个插件目录<code>libbtbb</code>)：</del></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> libbtbb-2018-12-R1/wireshark/plugins/btbb</span><br><span class="line">mkdir build</span><br><span class="line"><span class="built_in">cd</span> build</span><br><span class="line">cmake -DCMAKE_INSTALL_LIBDIR=/usr/lib/x86_64-linux-gnu/wireshark/plugins/2.6/libbtbb ..</span><br><span class="line">make</span><br><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
+
+<p><del>执行完<code>make install</code>命令后，在插件路径下是可以看到btbb.so这个文件的。<em>我的Wireshark是可以自动搜索子文件夹并加载插件，不确定其他版本的Wireshark是否也是这样。</em></del></p>
+<p><del>下面安装BT BR/EDR插件，需要先将路径切回到libbtbb-2018-12-R1所在的那一级路径再执行下面的命令：</del></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> libbtbb-2018-12-R1/wireshark/plugins/btbredr</span><br><span class="line">mkdir build</span><br><span class="line"><span class="built_in">cd</span> build</span><br><span class="line">cmake -DCMAKE_INSTALL_LIBDIR=/usr/lib/x86_64-linux-gnu/wireshark/plugins/2.6/libbtbb ..</span><br><span class="line">make</span><br><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
+
+<p><del>至此，Wireshark插件已经编译安装完毕。</del></p>
+<h2 id="固件更新"><a href="#固件更新" class="headerlink" title="固件更新"></a>固件更新</h2><p>在使用之前，需要对Ubertooth硬件中的固件进行更新。上面Ubertooth tools部分提到了<code>ubertooth-util -v</code>命令可以查看到当前刷入的固件版本，同时有一个<code>API 版本</code>的问题，Ubertooth要求固件的API版本与Ubertooth tools的版本一致，否则不能使用。</p>
+<p>在Ubertooth tools的源码中是包含了固件的，固件是<code>.dfu</code>格式的文件。源码中有可以直接用的固件，在<code>ubertooth-2018-12-R1/ubertooth-one-firmware-bin/bluetooth_rxtx.dfu</code>。更新固件的命令是：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ubertooth-dfu -d bluetooth_rxtx.dfu -r</span><br></pre></td></tr></table></figure>
+
+<p>我在虚拟机中执行这一步的时候报错了，每次执行的时候都会尝试切换到DFU模式，然后USB显示无法识别，同时硬件上面的四个由深到浅的红色指示灯一直循环跑马灯。不知道这里是我虚拟机有问题，还是我的USB口有问题。</p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_160303.png" alt="刷入固件报错"></p>
+<p>尝试了很久都不成功之后，找了一台macbook，安装ubertooth tool，执行上面的命令，成功刷入。</p>
+<p>这里官方给出了一个troubleshooting，如果有报错<code>libUSB Error: Command Error: (-1)</code>，或者硬件上面四个灯跑马灯的话，需要重新编译固件，就要用到<code>ubertooth-2018-12-R1/firmware</code>文件夹的内容了，编译命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> ubertooth-2018-12-R1/firmware</span><br><span class="line">make clean all &amp;&amp; make</span><br><span class="line">ubertooth-dfu -r -d bluetooth_rxtx/bluetooth_rxtx.dfu</span><br></pre></td></tr></table></figure>
+
+<p><em>在之前一直提示<code>Unable to find Ubertooth</code>错误的时候，我也尝试编译了固件，证明并不是固件的问题。由于没有成功刷入编译的固件，此部分不再赘述。</em></p>
+<h1 id="抓包验证"><a href="#抓包验证" class="headerlink" title="抓包验证"></a>抓包验证</h1><h2 id="Wireshark设置"><a href="#Wireshark设置" class="headerlink" title="Wireshark设置"></a>Wireshark设置</h2><p>到了这一步，前期准备工作就都完成了。现在需要把Ubertooth和Wireshark进行联动，将Ubertooth收集到的数据传到Wireshark进行解析。这里主要参考<a target="_blank" rel="noopener" href="https://github.com/greatscottgadgets/ubertooth/wiki/Capturing-BLE-in-Wireshark">官方Wiki</a>，步骤如下：</p>
+<ol>
+<li><p>在终端中运行命令：<code>mkfifo /tmp/pipe</code></p>
+</li>
+<li><p>打开Wireshark，选择 ‘Capture -&gt; Options’ 对抓包接口进行设置</p>
+</li>
+<li><p>点击右下角 ‘Manage Interfaces’ 对接口进行管理</p>
+</li>
+<li><p>切换到 ‘Pipes’ 选项卡</p>
+</li>
+<li><p>保存设置，选中 ‘/tmp/pipe’ 并点击开始</p>
+</li>
+<li><p>此时，在终端中运行命令：<code>ubertooth-btle -f -c /tmp/pipe</code></p>
+</li>
+</ol>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_162401.png" alt="操作示意图"></p>
+<p>切回Wireshark，应该可以看到滚动的数据包了。</p>
+<div class="tip">
+这里有一点需要注意，“mkfifo /tmp/pipe” 命令需要在所有步骤前进行，即先创建pipe这个文件，再设置wireshark读取，最后用Ubertooth-btle命令写入，顺序错了是会不成功的
+</div>
+
+<h2 id="一些小问题"><a href="#一些小问题" class="headerlink" title="一些小问题"></a>一些小问题</h2><h3 id="DLT-147-check-your-Preferences-gt-Protocols-gt-DLT-USER"><a href="#DLT-147-check-your-Preferences-gt-Protocols-gt-DLT-USER" class="headerlink" title="DLT=147, check your Preferences-&gt;Protocols-&gt;DLT_USER"></a>DLT=147, check your Preferences-&gt;Protocols-&gt;DLT_USER</h3><p>这个问题我的个人理解是Wireshark没有能识别出这类数据包的具体类别，因此需要手动指定一下。</p>
+<p>这个是没进行操作之前（有报错的时候）</p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_151144.png" alt="DLT=147错误"></p>
+<p>步骤很简单：</p>
+<ol>
+<li><p>点击 Edit -&gt; Preference (编辑 -&gt; 首选项)</p>
+</li>
+<li><p>在左侧选择 <code>Protocol</code>下的<code>DLT_USER</code>选项</p>
+</li>
+<li><p>点击<code>Edit</code>按钮</p>
+</li>
+<li><p>点击左下角的 “+” 添加一条记录，在<code>DLT</code>处选择DLT=147，<code>Payload protocol</code>部分双击修改，填入btle，点击OK保存</p>
+</li>
+</ol>
+<p>此时显示就正常了。</p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_163721.png" alt="修复步骤"></p>
+<p>这是修复过的样子：</p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-17_163522.png" alt="修复了DLT=147的界面"></p>
+<h3 id="undefined-symbol-new-create-dissector-handle"><a href="#undefined-symbol-new-create-dissector-handle" class="headerlink" title="undefined symbol: new_create_dissector_handle"></a>undefined symbol: new_create_dissector_handle</h3><p>这个问题是在Wireshark 2.2+版本下按照官方Build Guide编译插件后造成的。原因在上面的插件编译那一节已经说到了，2.2+版本可以直接用，不需要进行任何插件的编译工作。</p>
+<p>因为折腾了很久才明白各个版本之间的区别，因此还是在这里提一句，记录一下。</p>
+<p>下面是这个错误报错的截图：</p>
+<p><img src="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/2019-06-18_193005.png" alt="Wireshark插件报错截图"></p>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%8E%AF%E5%A2%83%E8%AF%B4%E6%98%8E"><span class="toc-text">环境说明</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%BD%AF%E4%BB%B6%E7%BC%96%E8%AF%91"><span class="toc-text">软件编译</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#libbtbb-%E8%93%9D%E7%89%99%E5%9F%BA%E5%B8%A6%E5%BA%93"><span class="toc-text">libbtbb(蓝牙基带库)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ubertooth%E5%B7%A5%E5%85%B7%E8%BD%AF%E4%BB%B6"><span class="toc-text">Ubertooth工具软件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Wireshark%E6%8F%92%E4%BB%B6"><span class="toc-text">Wireshark插件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%BA%E4%BB%B6%E6%9B%B4%E6%96%B0"><span class="toc-text">固件更新</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%8A%93%E5%8C%85%E9%AA%8C%E8%AF%81"><span class="toc-text">抓包验证</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Wireshark%E8%AE%BE%E7%BD%AE"><span class="toc-text">Wireshark设置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E4%BA%9B%E5%B0%8F%E9%97%AE%E9%A2%98"><span class="toc-text">一些小问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DLT-147-check-your-Preferences-gt-Protocols-gt-DLT-USER"><span class="toc-text">DLT&#x3D;147, check your Preferences-&gt;Protocols-&gt;DLT_USER</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#undefined-symbol-new-create-dissector-handle"><span class="toc-text">undefined symbol: new_create_dissector_handle</span></a></li></ol></li></ol></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/" rel="next" title="Bluetooth Low Energy(BtLE)攻击方式简述">
+          Bluetooth Low Energy(BtLE)攻击方式简述
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2019/06/25/RFID%E6%94%BB%E5%87%BB%E6%96%B9%E6%B3%95%E6%A2%B3%E7%90%86/" rel="prev" title="RFID攻击方法梳理">
+            RFID攻击方法梳理
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

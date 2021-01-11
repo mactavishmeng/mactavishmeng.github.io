@@ -1,0 +1,423 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="Python,Wi-Fi,WPA," />
+  
+
+  
+    <meta name="description" content="WPA四次握手过程解析" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>WPA四次握手过程解析 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        WPA四次握手过程解析
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2020-06-29T02:29:48.000Z">
+        2020-06-29
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Python/" rel="tag">Python</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/WPA/" rel="tag">WPA</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Wi-Fi/" rel="tag">Wi-Fi</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 26 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>最近在梳理Wi-Fi的攻击方式，又看到了17年的KRACK漏洞。当时只是看了漏洞的原理和危害，并没有理解漏洞的成因和为什么被利用。本文尝试结合Python代码来理解一下WPA四次握手的过程，以及尝试分析一下KRACK漏洞。</p>
+<a id="more"></a>
+
+<h1 id="环境准备"><a href="#环境准备" class="headerlink" title="环境准备"></a>环境准备</h1><p>在正式开始分析之前，先要准备一下软件和分析对象。</p>
+<h2 id="系统环境"><a href="#系统环境" class="headerlink" title="系统环境"></a>系统环境</h2><p>本次使用的操作系统是Windows10 1909，部分需要Linux的使用虚拟机安装的Kali进行。</p>
+<p>代码部分，解释器版本为Python 2.7。</p>
+<p>数据包分析工具使用经典的Wireshark。</p>
+<h2 id="数据准备"><a href="#数据准备" class="headerlink" title="数据准备"></a>数据准备</h2><p>由于不同的加密方法和参数对握手包的影响较大，因此分析对象使用了Wireshark官方给出的WPA数据包。</p>
+<p>该数据包可以在<a target="_blank" rel="noopener" href="https://wiki.wireshark.org/HowToDecrypt802.11%E9%A1%B5%E9%9D%A2%E4%B8%8A%E8%BF%9B%E8%A1%8C%E4%B8%8B%E8%BD%BD%EF%BC%9A">https://wiki.wireshark.org/HowToDecrypt802.11页面上进行下载：</a></p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629105537200.png" alt="image-20200629105537200"></p>
+<p>额外说明一下，如果想自己捕获设备的WPA握手包，则需要额外的软件，并将网卡置为<code>Monitor Mode</code>。下面简单介绍一下。</p>
+<h2 id="手动捕获握手包"><a href="#手动捕获握手包" class="headerlink" title="手动捕获握手包"></a>手动捕获握手包</h2><p><strong>Windows平台</strong>：在Windows平台下想要捕获802.11管理帧，需要使用微软官方的软件<a target="_blank" rel="noopener" href="https://www.microsoft.com/en-us/download/details.aspx?id=4865">Microsoft Network Monitor</a>。它的安装和使用也相对比较方便，网上也有相当多的教程，如《<a target="_blank" rel="noopener" href="https://cstriker1407.info/blog/windows-80211-frame/">windows下抓取802.11管理包</a>》。有一点需要注意，该软件在“扫描设置（Scanning Options）”中开启<code>Monitor Mode</code>后，该窗口不能关闭，否则会退出：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/20150905181951_10373.png" alt="img"></p>
+<p><strong>Linux平台</strong>：在Linux平台下，可以借助我们熟悉的<code>aircrack-ng</code>套件来设置网卡的<code>Monitor Mode</code>，并使用<code>Wireshrak</code>来获取和查看数据。此处以Kali为例，其他Linux系统可以自行安装相关套件。</p>
+<p>设置监听模式的命令为：</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br></pre></td></tr></table></figure>
+
+<p>其中<code>wlan0</code>是网卡的名称。若出现以下情况：</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br><span class="line"></span><br><span class="line">Found <span class="number">2</span> processes that could cause trouble.</span><br><span class="line"><span class="keyword">If</span> airodump<span class="literal">-ng</span>, aireplay<span class="literal">-ng</span> or airtun<span class="literal">-ng</span> stops working after</span><br><span class="line">a short period of time, you may want to run <span class="string">&#x27;airmon-ng check kill&#x27;</span></span><br><span class="line"></span><br><span class="line">    PID Name</span><br><span class="line">   <span class="number">1959</span> NetworkManager</span><br><span class="line">   <span class="number">1989</span> wpa_supplicant</span><br><span class="line"></span><br><span class="line">PHY    Interface    Driver        Chipset</span><br><span class="line"></span><br><span class="line">phy0    wlan0        rt2800usb    Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br><span class="line">        (mac80211 monitor mode vif enabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0 on [<span class="type">phy0</span>]wlan0mon)</span><br><span class="line">        (mac80211 station mode vif disabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>说明网卡被占用，需要使用<code>airmon-ng check kill</code>命令来结束占用进程：</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng check kill</span></span><br><span class="line"></span><br><span class="line">Killing these processes:</span><br><span class="line"></span><br><span class="line">    PID Name</span><br><span class="line">   <span class="number">1989</span> wpa_supplicant</span><br><span class="line"></span><br><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">PHY    Interface    Driver        Chipset</span><br><span class="line"></span><br><span class="line">phy0    wlan0mon    rt2800usb    Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>这里网卡名称会变成<code>wlan0mon</code>，需要注意。</p>
+<p>但是，直接设置后抓包有时只能抓到部分，比如仅有AP侧的数据，设备端的数据包都丢失了，原因是<strong>未指定信道</strong>。此时需要使用<code>airodump-ng</code>工具查看目标AP的信道：</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airodump-ng wlan0mon</span></span><br></pre></td></tr></table></figure>
+
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629141915808.png" alt="image-20200629141915808"></p>
+<p>上图中第一行所示的信息中，CH表示信道，我们想对该AP进行四次握手的捕获，则需要将网卡监听的信道固定为11：</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0mon 11</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">PHY    Interface    Driver        Chipset</span><br><span class="line"></span><br><span class="line">phy0    wlan0mon    rt2800usb    Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br><span class="line">        (mac80211 monitor mode already enabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0mon on [<span class="type">phy0</span>]<span class="number">11</span>)</span><br></pre></td></tr></table></figure>
+
+<p>看到命令行中最后一行括号里的提示，表示已经设置为固定监听信道11。</p>
+<p>此时打开wireshark，选中网卡wlan0mon即可捕获。</p>
+<h1 id="WPA四次握手"><a href="#WPA四次握手" class="headerlink" title="WPA四次握手"></a>WPA四次握手</h1><p>在上一篇文章《Wi-Fi攻击方式简述》中，已经对WPA的握手过程进行过简单讲解，总结起来WPA的四次握手完成了：</p>
+<p>1）Wi-Fi密码的验证</p>
+<p>2）后续信道加密的密码的确认（注意这里不是“传输”）</p>
+<p>而在其握手过程中，会生成一些过程产物，如加密握手数据的密钥、完整性校验数据等。密钥计算的总览视图如下：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629154441387.png" alt="image-20200629154441387"></p>
+<p>四次握手的简单示意图：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/686769-20161117152254170-216963418.png" alt="686769-20161117152254170-216963418"></p>
+<p>接下来会逐步介绍每一步的计算过程。</p>
+<h2 id="握手前的准备：计算PMK"><a href="#握手前的准备：计算PMK" class="headerlink" title="握手前的准备：计算PMK"></a>握手前的准备：计算PMK</h2><p><strong>PMK(Pairwise Master Key)</strong> 是整个WPA认证过程中非常核心的一个密钥，是由Wi-Fi的<code>SSID</code>和<code>Pre-Shared-Key</code>（即Wi-Fi密码）计算而来，其算法被称为Password-Based Key Derivation Function 2 (PBKDF2) ，是一种使用HMAC-SHA1，使用SSID作为盐值来进行哈希的一种算法。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629170801055.png" alt="image-20200629170801055"></p>
+<p>在默认的Python环境中，需要安装<code>pbkdf2</code>库来支持这种算法，可以使用<code>pip install pbkdf2</code>命令来安装 。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pbkdf2 <span class="keyword">import</span> PBKDF2</span><br><span class="line"></span><br><span class="line">psk = <span class="string">&quot;Induction&quot;</span></span><br><span class="line">ssid = <span class="string">&quot;Coherer&quot;</span></span><br><span class="line">pmk = PBKDF2(psk, ssid, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br></pre></td></tr></table></figure>
+
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629165810353.png" alt="image-20200629165810353"></p>
+<p>此外，可以利用Linux系统中的<code>wpa_passphrase</code>工具来计算PMK，其命令为：</p>
+<figure class="highlight powershell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pentest@DESKTOP<span class="literal">-2AE07FJ</span>:~<span class="variable">$</span> wpa_passphrase Coherer Induction</span><br></pre></td></tr></table></figure>
+
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629165935651.png" alt="image-20200629165935651"></p>
+<p>这里可以看出来，计算出来的值是一致的。</p>
+<h2 id="第一次握手：传递ANonce，STA计算PTK"><a href="#第一次握手：传递ANonce，STA计算PTK" class="headerlink" title="第一次握手：传递ANonce，STA计算PTK"></a>第一次握手：传递ANonce，STA计算PTK</h2><p>在WPA的第一次握手时，由AP向STA发送<code>ANonce</code>：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629170336475.png" alt="image-20200629170336475"></p>
+<p>在这个数据包中，除了 <code>ANonce</code> 以外，在头部包含了双方的MAC地址。此时<strong>STA本地生成SNonce，满足了PTK计算的全部条件，因此进行PTK的计算</strong>。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629171145032.png" alt="image-20200629171145032"></p>
+<p><strong>由于SNonce在第二次握手的数据包中，因此这部分的演示在下一节进行。</strong></p>
+<h2 id="第二次握手：传递SNonce，AP计算PTK"><a href="#第二次握手：传递SNonce，AP计算PTK" class="headerlink" title="第二次握手：传递SNonce，AP计算PTK"></a>第二次握手：传递SNonce，AP计算PTK</h2><p>第二次握手时，STA向AP发送SNonce：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629171638896.png" alt="image-20200629171638896"></p>
+<p>PTK（Pairwise Transient Key）的计算需要使用<strong>PRF512</strong>算法，其实现是参照《<a target="_blank" rel="noopener" href="https://www.shellvoide.com/wifi/understanding-wpa-wpa2-hash-mic-cracking-process-python/">Understanding WPA/WPA2 Hash (MIC) Cracking Process In Python</a>》文章中给出的算法进行：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">customPRF512</span>(<span class="params">key, A, B</span>):</span></span><br><span class="line">    blen = <span class="number">64</span></span><br><span class="line">    i = <span class="number">0</span></span><br><span class="line">    R = <span class="string">&#x27;&#x27;</span></span><br><span class="line">    <span class="keyword">while</span> i &lt;= ((blen * <span class="number">8</span> + <span class="number">159</span>) / <span class="number">160</span>):</span><br><span class="line">        hmacsha1 = hmac.new(key, A + chr(<span class="number">0x00</span>) + B + chr(i), hashlib.sha1)</span><br><span class="line">        i += <span class="number">1</span></span><br><span class="line">        R = R + hmacsha1.digest()</span><br><span class="line">    <span class="keyword">return</span> R[:blen]</span><br></pre></td></tr></table></figure>
+
+<p>从前两次握手包中提取的<code>ANonce</code>、<code>SNonce</code> 以及双方的MAC地址，拼接起来作为计算PTK的部分：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">mac_ap = binascii.unhexlify(<span class="string">&quot;000c4182b255&quot;</span>)</span><br><span class="line">mac_cl = binascii.unhexlify(<span class="string">&quot;000d9382363a&quot;</span>)</span><br><span class="line">anonce = binascii.unhexlify(<span class="string">&quot;3e8e967dacd960324cac5b6aa721235bf57b949771c867989f49d04ed47c6933&quot;</span>)</span><br><span class="line">snonce = binascii.unhexlify(<span class="string">&quot;cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386&quot;</span>)</span><br><span class="line">key_data = min(mac_ap, mac_cl) + max(mac_ap, mac_cl) + min(anonce,snonce) + max(anonce,snonce)</span><br></pre></td></tr></table></figure>
+
+<p><code>PRF512</code>需要3个参数，<code>PMK</code>，<code>PKE</code> 和上面计算出来的 <code>key_data</code>。其中<code>PKE</code>是一个固定字符串，<code>PMK</code>在前文中有过计算：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">pke = <span class="string">&quot;Pairwise key expansion&quot;</span></span><br><span class="line">pmk = PBKDF2(<span class="string">&quot;Induction&quot;</span>, <span class="string">&quot;Coherer&quot;</span>, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br><span class="line">ptk = customPRF512(pmk, pke, key_data)</span><br><span class="line"><span class="comment"># 此处ptk的值(Hex String)为：b1cd792716762903f723424cd7d1651182a644133bfa4e0b75d96d230835843315798d511beae0028313c8ab32f12c7ecb71c893482669daaf0e9223fe1c0aed</span></span><br></pre></td></tr></table></figure>
+
+<p>到这里，AP和STA各自都计算出了PTK（正常情况下双方算出的PTK内容是一致的）。</p>
+<h2 id="PTK的构成"><a href="#PTK的构成" class="headerlink" title="PTK的构成"></a>PTK的构成</h2><p>上一步骤中，计算出来的PTK是一个512bit的字符串（64字节），这是由于我们下载的Wireshark官方提供的样例包中的WPA采用的是TKIP加密，如果是CCMP加密，这里的算法会有所区别，因为计算出的PTK应当为384bit。</p>
+<p>此处以TKIP加密为例，512bit的字符串可以分割为3个部分：KCK、KEK 和 TK。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629191743423.png" alt="image-20200629191743423"></p>
+<p><strong>KCK (Key Confirmation Key)：</strong>用于计算WPA EAPOL密钥消息的MIC（完整性验证）</p>
+<p><strong>KEK (Key Encryption Key)：</strong>用于加密发送到客户端的附加数据（在“密钥数据”字段中）</p>
+<p><strong>TK (Temporal Key)：</strong>用于后续通信数据加密</p>
+<p>TKIP加密模式下，PTK共512bit，其中按顺序为：KCK（128bit），KEK（128bit），TK（256bit）</p>
+<p>CCMP加密模式下，PTK共384bit，其中按顺序为：KCK（128bit），KEK（128bit），TK（128bit）</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630095341818.png" alt="image-20200630095341818"></p>
+<p>如上节中计算的PTK，按照长度划分，应为：</p>
+<p>KCK = b1cd792716762903f723424cd7d16511</p>
+<p>KEK = 82a644133bfa4e0b75d96d2308358433</p>
+<p>TK = 15798d511beae0028313c8ab32f12c7ecb71c893482669daaf0e9223fe1c0aed</p>
+<h2 id="验证MIC"><a href="#验证MIC" class="headerlink" title="验证MIC"></a>验证MIC</h2><p>比较第一次和第二次握手，在数据包中会发现在<code>WPA Key MIC</code>字段中由原来的全0变成了一串字符：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629202936492.png" alt="image-20200629202936492"></p>
+<p><strong>MIC (Message Integrity Code)：</strong>消息完整性代码 是校验数据是否被篡改，以及PSK是否正确（因为MIC是由PTK参与计算，PTK由是由PSK生成）。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630100306995.png" alt="image-20200630100306995"></p>
+<p>MIC的计算是以KCK为密钥（Key），整个802.1X报文为消息体（Message）进行HMAC运算得出的结果，共128bit。</p>
+<p>顺便一提，WPA的密码离线破解也是利用PSK生成PMK，并根据握手包计算KCK，再生成MIC并对比原数据包中的MIC来确定密码是否正确。</p>
+<p>在我们手工验证的时候，需要先将整个报文（这里以第二次握手为例）提取出来，并找到<code>WPA Key MIC</code>字段，将这部分内容替换成0，再计算。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630101214680.png" alt="image-20200630101214680"></p>
+<p>这部分代码如下：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">payload = binascii.unhexlify(<span class="string">&quot;0203007502010a00100000000000000000cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001630140100000fac020100000fac040100000fac020000&quot;</span>)</span><br><span class="line">mic = hmac.new(ptk[<span class="number">0</span>:<span class="number">16</span>], payload, hashlib.sha1).hexdigest()[:<span class="number">32</span>]</span><br></pre></td></tr></table></figure>
+
+<p>至此，大部分的计算和校验任务已经结束。</p>
+<h2 id="第三次握手：传递加密的GTK，STA安装TK"><a href="#第三次握手：传递加密的GTK，STA安装TK" class="headerlink" title="第三次握手：传递加密的GTK，STA安装TK"></a>第三次握手：传递加密的GTK，STA安装TK</h2><p>第三次握手，由AP向STA发送数据，其中MIC部分与上面的计算方式一致。STA接收到数据后，验证MIC通过则说明AP是有效的，双方PMK是一致的。</p>
+<p>同时，在这个数据包中，包含了加密后的GTK。<strong>GTK (Group Temporal Key)</strong> 用于加密广播和多播数据。GTK加密的密钥为KEK，其解密和使用不在此详述。</p>
+<p>当STA接收到第三次握手包并验证MIC通过后，会将计算出来的TK（PTK的最后一段）安装到系统中，作为后续的通信加密密钥。</p>
+<h2 id="第四次握手：AP安装TK"><a href="#第四次握手：AP安装TK" class="headerlink" title="第四次握手：AP安装TK"></a>第四次握手：AP安装TK</h2><p>最后一次握手仅为STA向AP发送的确认信息，表示密钥已经安装完毕，此时AP端也会进行密钥安装，至此，双方的密钥安装全部结束，后续通信中按照前面步骤中的密钥进行通信。</p>
+<h1 id="密钥重装攻击-KRACK-Attack"><a href="#密钥重装攻击-KRACK-Attack" class="headerlink" title="密钥重装攻击 KRACK Attack"></a>密钥重装攻击 KRACK Attack</h1><p>上文中简单梳理了一下WPA四次握手的过程，其中省略了一些部分。由于主要是想帮助对KRACK漏洞的理解，因此重点放在第三次握手的密钥安装部分，安装的密钥来源上。</p>
+<h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><p>关于这一漏洞，感兴趣的可以参考《<a target="_blank" rel="noopener" href="https://www.freebuf.com/articles/wireless/150953.html">WPA2 密钥重装攻击 KRACK Attacks 分析报告</a>》，个人感觉这篇文章解释的比较详细，总结起来这个漏洞就是：</p>
+<blockquote>
+    其中，wpa_supplicant 2.4及2.5版本实现了协议注释内容“一旦安装后，就可从内存中清除加密密钥”，将导致客户端会安装值全为零的秘钥。因此使用了这些wpa_supplicant版本的Linux及Android设备将遭受严重威胁。
+</blockquote>
+
+<p>这个漏洞是利用wpa_supplicant在第三次握手时对TK的处理来达到攻击的目的的。由于TK是根据第一次和第二次握手包中的数据生成，因此STA会将该密钥保存在本地的内存中。当收到第三次握手的数据包时，STA会将该密钥安装，并从内存中清除（“一旦安装后，就可从内存中清除加密密钥”），因此再次收到该握手包时，程序会再次加载这部分已被清零的内存，导致重新安装的密钥为全0。</p>
+<h2 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h2><p>由于目前未找到直接的利用EXP/POC，在Github上有一个检测工具：<a target="_blank" rel="noopener" href="https://github.com/vanhoefm/krackattacks-scripts%EF%BC%8C%E5%85%B6%E5%AE%98%E7%BD%91">https://github.com/vanhoefm/krackattacks-scripts，其官网</a> <a target="_blank" rel="noopener" href="https://www.krackattacks.com/">https://www.krackattacks.com</a> 上有对这个漏洞的演示。</p>
+<p>从原理和演示来看，KRACK漏洞需要搭建Rogue AP做中间人，转发握手数据帧。当发送第三次握手包时，进行重放。</p>
+<p>由于多次接收到第三次握手包，STA会尝试安装全0的密钥，并使用密钥加密后续通信包。Rogue AP的通信密钥预先就被置为0，这样就可以正常的和STA通信。</p>
+<p>目前没有时间来实践这个漏洞，仅从原理上对漏洞的利用方式进行分析，该漏洞更像是传统的Evil Twin的攻击方法，但Evil Twin需要知道目标AP的密码，才能让用户的设备顺利连入；而借助KRACK Attack，攻击者无需知道目标AP的密码即可实现中间人攻击，监听受害者流量。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>WPA的四次握手中，前两次是在互相交换计算PTK的信息（ANonce、SNonce），AP验证STA身份（利用MIC）并各自计算出PTK；第三次握手STA验证了AP的身份，传输加密GTK，并将计算出的TK安装；第四次握手确认密钥安装完成。</p>
+<p>附：完整的计算MIC的 Python 代码</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pbkdf2 <span class="keyword">import</span> PBKDF2</span><br><span class="line"><span class="keyword">import</span> hmac, binascii, hmac, hashlib, sha</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">customPRF512</span>(<span class="params">key, A, B</span>):</span></span><br><span class="line">    blen = <span class="number">64</span></span><br><span class="line">    i = <span class="number">0</span></span><br><span class="line">    R = <span class="string">&#x27;&#x27;</span></span><br><span class="line">    <span class="keyword">while</span> i &lt;= ((blen * <span class="number">8</span> + <span class="number">159</span>) / <span class="number">160</span>):</span><br><span class="line">        hmacsha1 = hmac.new(key, A + chr(<span class="number">0x00</span>) + B + chr(i), sha)</span><br><span class="line">        i += <span class="number">1</span></span><br><span class="line">        R = R + hmacsha1.digest()</span><br><span class="line">    <span class="keyword">return</span> R[:blen]</span><br><span class="line"></span><br><span class="line">psk = <span class="string">&quot;Induction&quot;</span></span><br><span class="line">ssid = <span class="string">&quot;Coherer&quot;</span></span><br><span class="line">pmk = PBKDF2(psk, ssid, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br><span class="line"></span><br><span class="line">mac_ap = binascii.unhexlify(<span class="string">&quot;000c4182b255&quot;</span>)</span><br><span class="line">mac_cl = binascii.unhexlify(<span class="string">&quot;000d9382363a&quot;</span>)</span><br><span class="line">anonce = binascii.unhexlify(<span class="string">&quot;3e8e967dacd960324cac5b6aa721235bf57b949771c867989f49d04ed47c6933&quot;</span>)</span><br><span class="line">snonce = binascii.unhexlify(<span class="string">&quot;cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386&quot;</span>)</span><br><span class="line"></span><br><span class="line">key_data = min(mac_ap, mac_cl) + max(mac_ap, mac_cl) + min(anonce,snonce) + max(anonce,snonce)</span><br><span class="line">pke = <span class="string">&quot;Pairwise key expansion&quot;</span></span><br><span class="line">ptk = customPRF512(pmk, pke, key_data)</span><br><span class="line"></span><br><span class="line"><span class="keyword">print</span> <span class="string">&quot;PTK Original:                &quot;</span>,ptk.encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="keyword">print</span> <span class="string">&quot;EAPOL-Key Confirm Key:       &quot;</span>,ptk[:<span class="number">16</span>].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="keyword">print</span> <span class="string">&quot;EAPOL-Key Encrypt Key:       &quot;</span>,ptk[<span class="number">16</span>:<span class="number">32</span>].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="keyword">print</span> <span class="string">&quot;(TKIP|CCMP) Temporal Key:    &quot;</span>,ptk[<span class="number">32</span>:].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"></span><br><span class="line">payload = binascii.unhexlify(<span class="string">&quot;0203007502010a00100000000000000000cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001630140100000fac020100000fac040100000fac020000&quot;</span>)</span><br><span class="line"></span><br><span class="line">mic = hmac.new(ptk[<span class="number">0</span>:<span class="number">16</span>], payload, hashlib.sha1).hexdigest()[:<span class="number">32</span>]</span><br><span class="line"><span class="keyword">print</span> <span class="string">&quot;MIC (Message Integrity Code):&quot;</span>,mic</span><br></pre></td></tr></table></figure>
+
+
+
+<p><strong>参考链接</strong></p>
+<p>[1] <a href="WPA/RSN%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E5%92%8CPTK">WPA/RSN四次握手和PTK</a></p>
+<p>[2] <a target="_blank" rel="noopener" href="https://dalewifisec.wordpress.com/2013/06/03/keys-keys-and-even-more-keys/">KEYS, KEYS, AND EVEN MORE KEYS!</a></p>
+<p>[3] <a href="WPA/WPA2-PSK%E8%AE%A4%E8%AF%81%E8%BF%87%E7%A8%8B">WPA/WPA2-PSK认证过程</a></p>
+<p>[4] <a target="_blank" rel="noopener" href="https://www.jianshu.com/p/392362718d68">四次握手</a></p>
+<p>[5] <a target="_blank" rel="noopener" href="https://www.cnblogs.com/efzju/p/3199330.html">安全协议系列（二）—-CCM与CCMP</a></p>
+<p>[6] <a target="_blank" rel="noopener" href="https://www.krackattacks.com/">https://www.krackattacks.com/</a></p>
+<p>[7] <a target="_blank" rel="noopener" href="https://github.com/vanhoefm/krackattacks-scripts">https://github.com/vanhoefm/krackattacks-scripts</a></p>
+<p>[8] <a target="_blank" rel="noopener" href="https://www.freebuf.com/articles/wireless/153255.html">国内研究人员首次Wifi重大漏洞利用实现 | Krack攻击测试套件打包</a></p>
+<p>[9] <a target="_blank" rel="noopener" href="https://www.freebuf.com/articles/wireless/150953.html">WPA2 密钥重装攻击 KRACK Attacks 分析报告</a></p>
+<p>[10] <a target="_blank" rel="noopener" href="https://www.shellvoide.com/wifi/understanding-wpa-wpa2-hash-mic-cracking-process-python/">Understanding WPA/WPA2 Hash (MIC) Cracking Process In Python</a></p>
+<p>[11] <a target="_blank" rel="noopener" href="https://wiki.wireshark.org/HowToDecrypt802.11">HowToDecrypt802.11</a></p>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%8E%AF%E5%A2%83%E5%87%86%E5%A4%87"><span class="toc-text">环境准备</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E7%8E%AF%E5%A2%83"><span class="toc-text">系统环境</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%87%86%E5%A4%87"><span class="toc-text">数据准备</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E6%8D%95%E8%8E%B7%E6%8F%A1%E6%89%8B%E5%8C%85"><span class="toc-text">手动捕获握手包</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B"><span class="toc-text">WPA四次握手</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%A1%E6%89%8B%E5%89%8D%E7%9A%84%E5%87%86%E5%A4%87%EF%BC%9A%E8%AE%A1%E7%AE%97PMK"><span class="toc-text">握手前的准备：计算PMK</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E6%AC%A1%E6%8F%A1%E6%89%8B%EF%BC%9A%E4%BC%A0%E9%80%92ANonce%EF%BC%8CSTA%E8%AE%A1%E7%AE%97PTK"><span class="toc-text">第一次握手：传递ANonce，STA计算PTK</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E6%AC%A1%E6%8F%A1%E6%89%8B%EF%BC%9A%E4%BC%A0%E9%80%92SNonce%EF%BC%8CAP%E8%AE%A1%E7%AE%97PTK"><span class="toc-text">第二次握手：传递SNonce，AP计算PTK</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PTK%E7%9A%84%E6%9E%84%E6%88%90"><span class="toc-text">PTK的构成</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81MIC"><span class="toc-text">验证MIC</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E4%B8%89%E6%AC%A1%E6%8F%A1%E6%89%8B%EF%BC%9A%E4%BC%A0%E9%80%92%E5%8A%A0%E5%AF%86%E7%9A%84GTK%EF%BC%8CSTA%E5%AE%89%E8%A3%85TK"><span class="toc-text">第三次握手：传递加密的GTK，STA安装TK</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AC%AC%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%EF%BC%9AAP%E5%AE%89%E8%A3%85TK"><span class="toc-text">第四次握手：AP安装TK</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%AF%86%E9%92%A5%E9%87%8D%E8%A3%85%E6%94%BB%E5%87%BB-KRACK-Attack"><span class="toc-text">密钥重装攻击 KRACK Attack</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%9F%E7%90%86"><span class="toc-text">原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%A9%E7%94%A8"><span class="toc-text">利用</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/" rel="next" title="Wi-Fi攻击方式简述">
+          Wi-Fi攻击方式简述
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2020/07/14/XSS%E6%B5%8B%E8%AF%95%E5%BF%83%E5%BE%97/" rel="prev" title="从防护视角谈XSS的成因、绕过和防御">
+            从防护视角谈XSS的成因、绕过和防御
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

@@ -1,0 +1,371 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="Python,Burpsuite,反向代理,MiTM,DNS劫持,HTTPS," />
+  
+
+  
+    <meta name="description" content="使用Python搭建反向代理分析IoT设备流量" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>使用Python搭建反向代理分析IoT设备流量 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        使用Python搭建反向代理分析IoT设备流量
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2020-04-16T02:06:06.000Z">
+        2020-04-16
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Burpsuite/" rel="tag">Burpsuite</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/DNS%E5%8A%AB%E6%8C%81/" rel="tag">DNS劫持</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/HTTPS/" rel="tag">HTTPS</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/MiTM/" rel="tag">MiTM</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Python/" rel="tag">Python</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86/" rel="tag">反向代理</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 23 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>反向代理的概念和应用早已不是什么稀奇玩意了。但是在测试过程中，对于那些无法配置代理，使用了HTTPS的设备，想要分析流量还是比较困难的。借助反向代理，则可以降低这一过程的难度，轻松获取到想要的数据。</p>
+<p>本文是接续“Frida抓包”和“利用泄露的HTTPS证书”这两篇文章的后续，将这两篇文章中提到的技术进行了简化和实现和拓展，提供一种新的测试思路。</p>
+<a id="more"></a>
+
+<h2 id="故事的开始"><a href="#故事的开始" class="headerlink" title="故事的开始"></a>故事的开始</h2><p>书接上文。在使用Apache配置了反向代理，利用Proxifier转发流量并使用Burpsuite抓包后，发现这一流程非常麻烦，且难以在其他领域复现。比如测试目标是IoT设备，无法接入设备修改Hosts文件，则较难引导流量。</p>
+<p>虽然说ARP攻击也是可以完成的，但是很容易在局域网内引起网络拥堵、丢包等情况：总是会觉得设备响应变慢，用Wireshark抓包的时候看到一大片重传包（不知道是不是哪里设置的不对，如果有大佬知道还烦请指点一二）。</p>
+<p>因此想到使用DNS欺骗的方法来引导流量，并搭建反向代理，在出口上指定Proxy到Burpsuite，这样就可以在一个程序里完成全部操作，省时省力。</p>
+<h2 id="DNS欺骗"><a href="#DNS欺骗" class="headerlink" title="DNS欺骗"></a>DNS欺骗</h2><p>这里的DNS欺骗其实是有歧义的。一般意义上说DNS欺骗，大体就是两种：篡改Hosts和本地DNS劫持。</p>
+<p><strong>篡改Hosts</strong>：这种方法并不通用，很多设备都无法修改Hosts文件，如IoT设备、未Root的安卓/iOS设备等。</p>
+<p><strong>本地DNS劫持</strong>：这种方式使用ARP引导流量，过滤出其中的DNS请求，将要篡改的域名进行响应。一般用Ettercap工具去做（如果一定要劫持推荐试试Bettercap），但是仍然没跳出ARP的范畴。</p>
+<p>因此这里选用了一个门槛略高但方式更加温和的思路：伪造DNS服务器。</p>
+<p>门槛高是因为这种方式需要接触设备/路由器，将其中的首选DNS服务器地址设置成本机的IP，而温和是因为这种方式并不会对局域网流量造成任何影响。使用ARP攻击，局域网内会有大量的假ARP请求，且目标机器的流量全部会经过本机，而我们感兴趣的可能只是其中很小很小很小的一部分。</p>
+<h2 id="开始动手"><a href="#开始动手" class="headerlink" title="开始动手"></a>开始动手</h2><p>既然确定了思路，下面就是动手环节了，先搭建一个DNS服务器。</p>
+<h3 id="写一个简易DNS服务器"><a href="#写一个简易DNS服务器" class="headerlink" title="写一个简易DNS服务器"></a>写一个简易DNS服务器</h3><p>为什么要自己写一个？不用现成的？</p>
+<p>这两个疑问可能是很多人（包括我自己）都会提出的，毕竟重复造轮子是一件很没有意义和效率的事情。但是基于我找到的DNS服务器搭建都是很复杂的方案，比如<code>Bind9</code>，<code>Windows Server</code>等等，尝试过后发现复杂且难用（压根就没配置成功过），于是一气之下就打算自己写一个。</p>
+<p>原理很简单，在本地监听53端口，当流量到达的时候按照DNS的协议解析，将要查询的域名提取出来，根据本地的规则匹配后返回IP，并封装成DNS应答发送出去。</p>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200423164654717.png" alt="image-20200423164654717"></p>
+<p>在查询DNS解析协议的时候，发现网上竟然有类似的Python代码，虽然说性能肯定不行，但是毕竟承载的设备数量不多，自己测试用肯定没问题。</p>
+<p>于是拿来主义，Copy过来源码，简单调试一下，成功！</p>
+<p>在此声明一下，这段源码在很多不同的博客或社区都有转载，但是无一例外都没注明作者。在进一步搜索之后，某一个博客页面上转载的代码里有一句注释，表明这个代码的作者是<code>@author: RobinTang</code>，不知道我这样使用是否侵权~原始代码如下：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"><span class="string">Created on 2012-10-15</span></span><br><span class="line"><span class="string">@author: RobinTang</span></span><br><span class="line"><span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> socketserver</span><br><span class="line"><span class="keyword">import</span> struct</span><br><span class="line"></span><br><span class="line"><span class="comment"># DNS Query</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">SinDNSQuery</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self, data</span>):</span></span><br><span class="line">        i = <span class="number">1</span></span><br><span class="line">        self.name = <span class="string">&#x27;&#x27;</span></span><br><span class="line">        <span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">            d = data[i]</span><br><span class="line">            <span class="keyword">if</span> d == <span class="number">0</span>:</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">if</span> d &lt; <span class="number">32</span>:</span><br><span class="line">                self.name = self.name + <span class="string">&#x27;.&#x27;</span></span><br><span class="line">            <span class="keyword">else</span>:</span><br><span class="line">                self.name = self.name + chr(d)</span><br><span class="line">            i = i + <span class="number">1</span></span><br><span class="line">        self.querybytes = data[<span class="number">0</span>:i + <span class="number">1</span>]</span><br><span class="line">        (self.type, self.classify) = struct.unpack(<span class="string">&#x27;&gt;HH&#x27;</span>, data[i + <span class="number">1</span>:i + <span class="number">5</span>])</span><br><span class="line">        self.len = i + <span class="number">5</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">getbytes</span>(<span class="params">self</span>):</span></span><br><span class="line">        <span class="keyword">return</span> self.querybytes + struct.pack(<span class="string">&#x27;&gt;HH&#x27;</span>, self.type, self.classify)</span><br><span class="line"></span><br><span class="line"><span class="comment"># DNS Answer RRS</span></span><br><span class="line"><span class="comment"># this class is also can be use as Authority RRS or Additional RRS</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">SinDNSAnswer</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self, ip</span>):</span></span><br><span class="line">        self.name = <span class="number">49164</span></span><br><span class="line">        self.type = <span class="number">1</span></span><br><span class="line">        self.classify = <span class="number">1</span></span><br><span class="line">        self.timetolive = <span class="number">190</span></span><br><span class="line">        self.datalength = <span class="number">4</span></span><br><span class="line">        self.ip = ip</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">getbytes</span>(<span class="params">self</span>):</span></span><br><span class="line">        res = struct.pack(<span class="string">&#x27;&gt;HHHLH&#x27;</span>, self.name, self.type, self.classify, self.timetolive, self.datalength)</span><br><span class="line">        s = self.ip.split(<span class="string">&#x27;.&#x27;</span>)</span><br><span class="line">        res = res + struct.pack(<span class="string">&#x27;BBBB&#x27;</span>, int(s[<span class="number">0</span>]), int(s[<span class="number">1</span>]), int(s[<span class="number">2</span>]), int(s[<span class="number">3</span>]))</span><br><span class="line">        <span class="keyword">return</span> res</span><br><span class="line"></span><br><span class="line"><span class="comment"># DNS frame</span></span><br><span class="line"><span class="comment"># must initialized by a DNS query frame</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">SinDNSFrame</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self, data</span>):</span></span><br><span class="line">        (self.id, self.flags, self.quests, self.answers, self.author, self.addition) = struct.unpack(<span class="string">&#x27;&gt;HHHHHH&#x27;</span>, data[<span class="number">0</span>:<span class="number">12</span>])</span><br><span class="line">        self.query = SinDNSQuery(data[<span class="number">12</span>:])</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">getname</span>(<span class="params">self</span>):</span></span><br><span class="line">        <span class="keyword">return</span> self.query.name</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">setip</span>(<span class="params">self, ip</span>):</span></span><br><span class="line">        self.answer = SinDNSAnswer(ip)</span><br><span class="line">        self.answers = <span class="number">1</span></span><br><span class="line">        self.flags = <span class="number">33152</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">getbytes</span>(<span class="params">self</span>):</span></span><br><span class="line">        res = struct.pack(<span class="string">&#x27;&gt;HHHHHH&#x27;</span>, self.id, self.flags, self.quests, self.answers, self.author, self.addition)</span><br><span class="line">        res = res + self.query.getbytes()</span><br><span class="line">        <span class="keyword">if</span> self.answers != <span class="number">0</span>:</span><br><span class="line">            res = res + self.answer.getbytes()</span><br><span class="line">        <span class="keyword">return</span> res</span><br><span class="line"><span class="comment"># A UDPHandler to handle DNS query</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">SinDNSUDPHandler</span>(<span class="params">socketserver.BaseRequestHandler</span>):</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">handle</span>(<span class="params">self</span>):</span></span><br><span class="line">        data = self.request[<span class="number">0</span>].strip()</span><br><span class="line">        dns = SinDNSFrame(data)</span><br><span class="line">        socket = self.request[<span class="number">1</span>]</span><br><span class="line">        namemap = SinDNSServer.namemap</span><br><span class="line">        <span class="keyword">if</span>(dns.query.type==<span class="number">1</span>):</span><br><span class="line">            <span class="comment"># If this is query a A record, then response it</span></span><br><span class="line"></span><br><span class="line">            name = dns.getname();</span><br><span class="line">            <span class="keyword">if</span> namemap.__contains__(name):</span><br><span class="line">                <span class="comment"># If have record, response it</span></span><br><span class="line">                dns.setip(namemap[name])</span><br><span class="line">                socket.sendto(dns.getbytes(), self.client_address)</span><br><span class="line">            <span class="keyword">elif</span> namemap.__contains__(<span class="string">&#x27;*&#x27;</span>):</span><br><span class="line">                <span class="comment"># Response default address</span></span><br><span class="line">                dns.setip(namemap[<span class="string">&#x27;*&#x27;</span>])</span><br><span class="line">                socket.sendto(dns.getbytes(), self.client_address)</span><br><span class="line">            <span class="keyword">else</span>:</span><br><span class="line">                <span class="comment"># ignore it</span></span><br><span class="line">                socket.sendto(data, self.client_address)</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            <span class="comment"># If this is not query a A record, ignore it</span></span><br><span class="line">            socket.sendto(data, self.client_address)</span><br><span class="line"></span><br><span class="line"><span class="comment"># DNS Server</span></span><br><span class="line"><span class="comment"># It only support A record query</span></span><br><span class="line"><span class="comment"># user it, U can create a simple DNS server</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">SinDNSServer</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span>(<span class="params">self, port=<span class="number">53</span></span>):</span></span><br><span class="line">        SinDNSServer.namemap = &#123;&#125;</span><br><span class="line">        self.port = port</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">addname</span>(<span class="params">self, name, ip</span>):</span></span><br><span class="line">        SinDNSServer.namemap[name] = ip</span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">start</span>(<span class="params">self</span>):</span></span><br><span class="line">        HOST, PORT = <span class="string">&quot;0.0.0.0&quot;</span>, self.port</span><br><span class="line">        server = socketserver.UDPServer((HOST, PORT), SinDNSUDPHandler)</span><br><span class="line">        server.serve_forever()</span><br><span class="line"></span><br><span class="line"><span class="comment"># Now, test it</span></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    sev = SinDNSServer()</span><br><span class="line">    sev.addname(<span class="string">&#x27;www.aa.com&#x27;</span>, <span class="string">&#x27;192.168.0.1&#x27;</span>)    <span class="comment"># add a A record</span></span><br><span class="line">    sev.addname(<span class="string">&#x27;www.bb.com&#x27;</span>, <span class="string">&#x27;192.168.0.2&#x27;</span>)    <span class="comment"># add a A record</span></span><br><span class="line">    sev.addname(<span class="string">&#x27;*&#x27;</span>, <span class="string">&#x27;0.0.0.0&#x27;</span>) <span class="comment"># default address</span></span><br><span class="line">    sev.start() <span class="comment"># start DNS server</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Now, U can use &quot;nslookup&quot; command to test it</span></span><br><span class="line"><span class="comment"># Such as &quot;nslookup www.aa.com&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>这段代码在Win Python 3.7环境下是没问题，可以正常响应，但是有两个问题：</p>
+<ol>
+<li>只能对域名进行精准匹配，无法使用<code>*</code>通配符；</li>
+<li>对于没有指定的域名，若设置了<code>default address</code>，则会一律返回该地址，否则就不回复</li>
+</ol>
+<p>在使用过程中，我需要让这个服务器对于我没指定的地址回复真实地址，这样可以保证被欺骗设备的其他业务是正常的（业务间可能存在关联性，某一业务无法访问可能导致其他业务停止），同时通配符可以减少统计域名的麻烦，也不会漏掉流量。</p>
+<p>针对以上两点，对源代码进行了部分的修改（修改详情可参考文末的连接）。</p>
+<h3 id="写一个反向代理服务器"><a href="#写一个反向代理服务器" class="headerlink" title="写一个反向代理服务器"></a>写一个反向代理服务器</h3><p>虽然使用Apache + Proxifier可以转流量，但是用到的工具多不易排错，且当需要修改配置时，Apache配置文件的查询、新增都相对麻烦。</p>
+<p>反向代理转发的思路也很简单：因为DNS欺骗，客户端会把流量发到本机，因此</p>
+<ol>
+<li>本机监听端口，将收到的HTTP(S)流量解析；</li>
+<li>取出Host字段中的目标域名、端口，重组新的请求发出；</li>
+<li>获取服务端响应</li>
+<li>发送给客户端</li>
+</ol>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200423171132217.png" alt="image-20200423171132217"></p>
+<p>既然要求便捷且不考虑性能，直接用Python的<code>http.server</code>模块构建一个HTTP服务器接收请求即可。</p>
+<p>重写<code>http.server.BaseHTTPRequestHandler</code>模块，对其中的HTTP方法处理进行重写即可：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">MyHandler</span>(<span class="params">http.server.BaseHTTPRequestHandler</span>):</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">req</span>(<span class="params">self</span>):</span></span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            <span class="keyword">if</span> isinstance(self.request, ssl.SSLSocket):</span><br><span class="line">                scheme = <span class="string">&quot;https://&quot;</span></span><br><span class="line">            <span class="keyword">else</span>:</span><br><span class="line">                scheme = <span class="string">&quot;http://&quot;</span></span><br><span class="line">                </span><br><span class="line">            <span class="comment"># 根据Host信息重组URL</span></span><br><span class="line">            self.url = scheme + self.headers[<span class="string">&quot;host&quot;</span>].strip(<span class="string">&quot;\n&quot;</span>) + self.path</span><br><span class="line"></span><br><span class="line">            <span class="comment"># 判断是否有HTTP Body</span></span><br><span class="line">            <span class="keyword">if</span> self.headers.__contains__(<span class="string">&#x27;Content-Length&#x27;</span>):</span><br><span class="line">                data = self.rfile.read(int(self.headers[<span class="string">&#x27;Content-Length&#x27;</span>]))</span><br><span class="line">            <span class="keyword">else</span>:</span><br><span class="line">                data = <span class="string">&quot;&quot;</span></span><br><span class="line"></span><br><span class="line">            req = requests.Request(method=self.command, url=self.url, headers=self.headers, data=data)</span><br><span class="line">            s = requests.Session()</span><br><span class="line">            prepped = req.prepare()</span><br><span class="line"></span><br><span class="line">            <span class="comment"># 将请求通过代理发送出去</span></span><br><span class="line">            r = s.send(prepped, verify=<span class="literal">False</span>,proxies=proxies, allow_redirects=<span class="literal">False</span>, stream=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line">            <span class="comment"># 设置对客户端的响应头</span></span><br><span class="line">            self.send_response(r.status_code)</span><br><span class="line">            <span class="keyword">for</span> key <span class="keyword">in</span> r.headers:</span><br><span class="line">                self.send_header(key, r.headers[key])</span><br><span class="line">            self.end_headers()</span><br><span class="line"></span><br><span class="line">            <span class="comment"># 写入Response Body，写完后会自动发出这个请求</span></span><br><span class="line">            self.wfile.write(r.content)</span><br><span class="line">        <span class="keyword">except</span> IOError <span class="keyword">as</span> e:</span><br><span class="line">            print(e)</span><br><span class="line">            self.send_error(<span class="number">404</span>, <span class="string">&#x27;file not found: %s&#x27;</span> % self.path)</span><br><span class="line">        <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">            print(e)</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_GET</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_POST</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_HEAD</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_OPTIONS</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_PUT</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_DELETE</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_MOVE</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">do_TRACE</span>(<span class="params">self</span>):</span></span><br><span class="line">        self.req()</span><br></pre></td></tr></table></figure>
+
+<p><code>http.server.BaseHTTPRequestHandler</code>模块会读取当前请求的<code>HTTP Method</code>，并调用<code>do_xxx</code>函数来进行处理。在这里我们并不需要对不同Method进行差异化处理，我们只想安安静静把他们转发出去，因此下面的<code>do_xxx</code>全部都调用<code>req()</code>统一进行处理。</p>
+<p>完整代码已上传Github：<a target="_blank" rel="noopener" href="https://github.com/mactavishmeng/mitmserver">https://github.com/mactavishmeng/mitmserver</a></p>
+<p>Github上的版本是将DNS服务器和反代服务器集成在一起，通过配置文件<code>mitmserver.json</code>来进行配置：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">&quot;proxies&quot;</span> : &#123;<span class="attr">&quot;http&quot;</span>: <span class="string">&quot;http://127.0.0.1:8080&quot;</span>,</span><br><span class="line">               <span class="attr">&quot;https&quot;</span>:<span class="string">&quot;http://127.0.0.1:8080&quot;</span>&#125;,</span><br><span class="line">  <span class="attr">&quot;dns_list&quot;</span> : [</span><br><span class="line">        &#123;<span class="attr">&quot;host&quot;</span>: <span class="string">&quot;www.baidu.cn&quot;</span>, <span class="attr">&quot;address&quot;</span>: <span class="string">&quot;192.168.1.3&quot;</span>&#125;,</span><br><span class="line">        &#123;<span class="attr">&quot;host&quot;</span>: <span class="string">&quot;*.baidu.cn&quot;</span>, <span class="attr">&quot;address&quot;</span>: <span class="string">&quot;192.168.1.3&quot;</span>&#125;,</span><br><span class="line">        &#123;<span class="attr">&quot;host&quot;</span>: <span class="string">&quot;www.google.com&quot;</span>, <span class="attr">&quot;address&quot;</span>: <span class="string">&quot;192.168.1.3&quot;</span>&#125;</span><br><span class="line">    ],</span><br><span class="line">  <span class="attr">&quot;dns_query_enable&quot;</span> : <span class="literal">true</span>,</span><br><span class="line">  <span class="attr">&quot;http_list&quot;</span> : [</span><br><span class="line">        &#123;<span class="attr">&quot;address&quot;</span>:<span class="string">&quot;0.0.0.0&quot;</span>, <span class="attr">&quot;port&quot;</span>:<span class="number">80</span>, <span class="attr">&quot;ishttps&quot;</span>:<span class="literal">false</span>&#125;,</span><br><span class="line">        &#123;<span class="attr">&quot;address&quot;</span>:<span class="string">&quot;0.0.0.0&quot;</span>, <span class="attr">&quot;port&quot;</span>:<span class="number">443</span>, <span class="attr">&quot;ishttps&quot;</span>:<span class="literal">true</span>, <span class="attr">&quot;certfile&quot;</span>:<span class="string">&quot;./certificate.crt&quot;</span>, <span class="attr">&quot;keyfile&quot;</span>:<span class="string">&quot;./private_key.key&quot;</span>&#125;</span><br><span class="line">    ]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在这个配置文件中可以轻易的对各个部分进行方便的调整，如配置的代理，本地监听的HTTP(S)端口，证书，DNS列表等。</p>
+<h2 id="实战验证"><a href="#实战验证" class="headerlink" title="实战验证"></a>实战验证</h2><p>实际使用中，整个流程的核心有两点：DNS如何欺骗，HTTPS证书是否是真的。</p>
+<h3 id="配置DNS"><a href="#配置DNS" class="headerlink" title="配置DNS"></a>配置DNS</h3><p>虽然上面说了那么多，还写了一个DNS服务器，<strong>但是如果你的路由器支持插件，可以自定义hosts</strong>，实际上是不需要这么麻烦的。比如我借到的这台极路由：</p>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200423193023221.png" alt="image-20200423193023221"></p>
+<p>直接用插件强行更改设备的DNS查询结果，不过有些路由器不支持修改Hosts，并不通用。</p>
+<ol>
+<li><p>手机、PC等可直接修改网络配置的设备</p>
+<p>对于手机APP来说，可以直接在“无线局域网”中将IP设置修改为“静态”，在DNS服务器部分配置IP为本机即可。以安卓为例：</p>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200423173255950.png" alt="image-20200423173255950"></p>
+</li>
+<li><p>IoT设备等无法直接修改配置的设备</p>
+<p>而IoT设备因为无法在设备上操作，需要在路由器上设置（如果能获得控制权的话）。</p>
+<p>将路由器的DNS设置为本机IP即可（不同路由器界面可能不同，但原理是一样的）：</p>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200423192754552.png" alt="image-20200423192754552"></p>
+</li>
+</ol>
+<p>至此，设备端DNS欺骗的前置步骤完成。</p>
+<h3 id="配置反向代理"><a href="#配置反向代理" class="headerlink" title="配置反向代理"></a>配置反向代理</h3><p>打开<code>mitmserver.json</code>，修改其中的监听端口的配置。</p>
+<p>如这里监听的APP通信，它与三个域名进行HTTPS通信，其中两个域名访问443，一个域名访问9988。此时配置列表里需打开两个监听端口（443、9988），并将<code>&quot;ishttps&quot;</code>的值设置为<code>true</code>，表示这个端口监听HTTPS。后面的<code>certfile</code>和<code>keyfile</code>部分填入证书和私钥文件的路径。</p>
+<p>如果你没有这两个文件，可以从Burpsuite等抓包工具中导出，或使用openssl工具生成自签名证书。</p>
+<h3 id="开始抓包"><a href="#开始抓包" class="headerlink" title="开始抓包"></a>开始抓包</h3><p>在本机上配置好要监听的端口、要劫持的域名、填入Burpsuite的地址后，即可开始抓包。</p>
+<p>此处以某安卓APP为例，因为已经做了证书校验的绕过，所以这里的HTTPS证书是随意找了一个来配置的（毕竟已经绕过校验）。配置文件如下：</p>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200424101749926.png" alt="image-20200424101749926"></p>
+<p>运行起来：</p>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200424102218780.png" alt="image-20200424102218780"></p>
+<p>对应在Burpsuite中拦截到的请求：</p>
+<p><img src="/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/image-20200424102421991.png" alt="image-20200424102421991"></p>
+<p>这样仅需一个py文件就完成了全部的复杂流程。</p>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%85%E4%BA%8B%E7%9A%84%E5%BC%80%E5%A7%8B"><span class="toc-text">故事的开始</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DNS%E6%AC%BA%E9%AA%97"><span class="toc-text">DNS欺骗</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%80%E5%A7%8B%E5%8A%A8%E6%89%8B"><span class="toc-text">开始动手</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%99%E4%B8%80%E4%B8%AA%E7%AE%80%E6%98%93DNS%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">写一个简易DNS服务器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%99%E4%B8%80%E4%B8%AA%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E6%9C%8D%E5%8A%A1%E5%99%A8"><span class="toc-text">写一个反向代理服务器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98%E9%AA%8C%E8%AF%81"><span class="toc-text">实战验证</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E7%BD%AEDNS"><span class="toc-text">配置DNS</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86"><span class="toc-text">配置反向代理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%80%E5%A7%8B%E6%8A%93%E5%8C%85"><span class="toc-text">开始抓包</span></a></li></ol></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/" rel="next" title="利用Frida手动绕过Android-APP证书校验">
+          利用Frida手动绕过Android-APP证书校验
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/" rel="prev" title="利用Python搭建长连接中间人工具分析流量">
+            利用Python搭建长连接中间人工具分析流量
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

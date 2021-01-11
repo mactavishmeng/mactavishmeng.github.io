@@ -1,0 +1,503 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="蓝牙," />
+  
+
+  
+    <meta name="description" content="Bluetooth Low Energy(BtLE)攻击方式简述" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>Bluetooth Low Energy(BtLE)攻击方式简述 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        Bluetooth Low Energy(BtLE)攻击方式简述
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2019-06-19T02:06:05.000Z">
+        2019-06-19
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%93%9D%E7%89%99/" rel="tag">蓝牙</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 37 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>最近收集了一些蓝牙方面存在的漏洞和攻击方式，本文简单的对收集到的资料进行一些整理和一些自己的理解和解释。其中整体方向是偏IoT设备的蓝牙安全。</p>
+<p>因为有部分是个人的理解，一些内容可能有错误。</p>
+<p>本文中的大部分内容都来自于DEFCON、Blackhat等安全类会议或者活动，且根据我查到的内容来看，蓝牙安全的内容发表时间集中在2013 至 2016，但是目前来说，由于蓝牙协议本身没有大的变化，协议本身也没有过多关注安全方面；而且IoT产品来说也都是各厂商实现自己的安全加固方案，因此虽然时间过去很久，但是这些攻击方式仍然具有参考价值。</p>
+<a id="more"></a>
+
+<h1 id="蓝牙通信简介"><a href="#蓝牙通信简介" class="headerlink" title="蓝牙通信简介"></a>蓝牙通信简介</h1><p>首先简单描述一下蓝牙通信的大致情况。由于我这次整理的重点偏流程和逻辑上的漏洞或威胁，因此对于协议底层（物理层，跳频等）不做过多的描述。</p>
+<h2 id="蓝牙协议"><a href="#蓝牙协议" class="headerlink" title="蓝牙协议"></a>蓝牙协议</h2><p>蓝牙协议基本分为两类，BR/EDR 和 LE。</p>
+<p><strong>BR/EDR</strong></p>
+<p>BR/EDR是Basic Rate / Enhanced Data Rate的缩写，属于蓝牙2.x版本所使用的协议。BR可以提供最高721.2Kbps的传输速率，EDR可以提供2.1Mbps的速率。</p>
+<p><strong>LE</strong></p>
+<p>LE 是 Low Energy的缩写，指的是低功耗蓝牙，蓝牙4.0+版本支持。其设计目的是更低的功耗，更低的复杂度，因此更适用于IoT场景。目前在智能家居、可穿戴设备领域广泛使用的蓝牙通信都是BtLE (Bluetooth Low Energy)。</p>
+<p>两个协议的共同点是L2CAP层是相同的，底层（物理层、链路层）都使用不同的协议，而高层（类似于TCP/IP的应用层）各自协议有自己的定义。</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/1.png" alt="协议兼容性示意图"></p>
+<p>目前来说大部分设备，尤其是IoT设备使用的都是LE，因此下面的内容也都是基于BLE的内容进行描述和整理，关于BR/EDR这种方式就不再描述。</p>
+<h2 id="拓扑结构"><a href="#拓扑结构" class="headerlink" title="拓扑结构"></a>拓扑结构</h2><p>BLE的拓扑结构属于星型结构，设备存在主从关系。主设备管理连接，可连接多台从设备；一个从设备只能连接一台主设备。</p>
+<p>因此，在BLE设备上会有六中状态：</p>
+<ul>
+<li><p><code>Standby</code>待机状态。设备不接受/发送数据，也没有连接到任何设备；</p>
+</li>
+<li><p><code>Advertiser</code>广播装填，周期性的进行广播；</p>
+</li>
+<li><p><code>Scanner</code>扫描状态，主动搜寻Advertiser；</p>
+</li>
+<li><p><code>Initiator</code>发起连接状态，主动向某设备发起连接；</p>
+</li>
+<li><p><code>Master</code>主设备；</p>
+</li>
+<li><p><code>Slave</code>从设备。</p>
+</li>
+</ul>
+<h2 id="连接过程"><a href="#连接过程" class="headerlink" title="连接过程"></a>连接过程</h2><p>由于BLE有主从设备之分，因此两台设备连接的时候过程会略有区别。</p>
+<p>主设备： <code>Standby</code> -&gt; <code>Scanner</code> -&gt; <code>Initiator</code> -&gt; <code>Master</code></p>
+<p>从设备： <code>Standby</code> -&gt; <code>Advertiser</code> -&gt; <code>Slave</code></p>
+<ol>
+<li><p><code>从设备</code>发起广播包</p>
+</li>
+<li><p><code>主设备</code>发起扫描事件，监听广播包</p>
+</li>
+<li><p><code>主设备</code>收到广播包，发出请求建立连接</p>
+</li>
+<li><p><code>从设备</code>接收到连接请求，建立连接。（发起连接方是<code>Master</code>，接受方是<code>Slave</code>）</p>
+</li>
+</ol>
+<h2 id="HCI简述"><a href="#HCI简述" class="headerlink" title="HCI简述"></a>HCI简述</h2><p>HCI (Host Controller Interface)提供了一个统一的蓝牙控制器方法，提供了同意的数据进入基带的方法，因此应用程序（Profile）无需知道基带的实现。</p>
+<p>上文叙述了BR/EDR 和 LE 的区别，对于应用程序/操作系统来说，它们并不关心底层协议，因此HCI中，Controller对接蓝牙基带，Host对接上层，因此HCI是将底层数据提交上来转换成统一的结构为上层提供服务。</p>
+<p>在抓包的过程中，能看到很多<code>host</code>和<code>controller</code>之间的数据交互，这部分实际上是在蓝牙协议栈内部完成的，与TCP/IP的形式有所区别。</p>
+<div class="tip">
+这个部分的叙述是我在查看Wireshark数据包的时候对蓝牙不同的数据包很混淆，实际上LE的数据交互可以从HCI的数据包开始看起，因为设备发起连接是<code>HCI Command</code>的数据包
+</div>
+
+<p>下图是Wireshark中解析出的蓝牙数据包（使用安卓系统抓包）</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/2.png" alt="Wireshark中的蓝牙HCI Command数据包"></p>
+<p>HCI数据包的格式定义，以<code>Kali Linux</code>为例，存放在<code>/usr/include/bluetooth/hci.h</code>文件中。使用编辑器打开该文件可以看到相关定义。</p>
+<h3 id="HCI-Command-和-HCI-Event"><a href="#HCI-Command-和-HCI-Event" class="headerlink" title="HCI Command 和 HCI Event"></a>HCI Command 和 HCI Event</h3><p>HCI分为<code>Command</code>和<code>Event</code>两种数据，<em>个人理解是从Host到Controller的数据都是Command, Controller到Host的都是Event</em> 。</p>
+<p>简单画了一张HCI Command协议的结构图：</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/2019-06-19_151521.png" alt="HCI Command协议结构图解"></p>
+<p>其中OpCode部分由两段组成，OCF和OGF，表示这个Command所要执行的内容。好在Wireshark中会帮我们将这些数据全部都解析出来，也就不需要手动去拆分了。</p>
+<p>HCI Event也是类似的结构，具体的定义可以查看<code>hci.h</code>文件中的详细定义，不再赘述。</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/2019-06-19_152537.png" alt="HCI Event协议结构图解"></p>
+<h2 id="GATT简述"><a href="#GATT简述" class="headerlink" title="GATT简述"></a>GATT简述</h2><p>GATT可以理解成TCP/IP的应用层，提供给操作系统与蓝牙模块交互的接口。其协议的层次结构大致如下：</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/2019-06-20_171312.png" alt="蓝牙协议层次示意图"></p>
+<h3 id="Services和Characteristics"><a href="#Services和Characteristics" class="headerlink" title="Services和Characteristics"></a>Services和Characteristics</h3><p>在蓝牙通信中，有一个和TCP/IP中<code>端口</code>类似的概念：Services和Characteristics。</p>
+<p>一个设备对外会提供多个Services，而每个Service都可能有多个Characteristics。这些都有对应的UUID，因此在通信的时候需要指定要通信的对方的Service UUID，以及Characteristic UUID。</p>
+<p>举个例子解释一下他们的关系：蓝牙通信需要目的地址，好比去一栋大楼里找房间，Services相当于单元号，而Characteristics相当于门牌号。指定了X单元Y号就能唯一指定一个房间。</p>
+<p>使用工具查看某蓝牙设备的信息如下：</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/3.png" alt="Services &amp; Characteristics"></p>
+<p>可以看到，除了圈出的部分，其他都是有文字描述的。蓝牙协议中，官方预留了一些UUID分配给已知的业务，类似于TCP/IP中1 - 1024的端口的分配，具体对应关系可以去查看官方的资料，有详细的说明。</p>
+<h1 id="蓝牙安全简述"><a href="#蓝牙安全简述" class="headerlink" title="蓝牙安全简述"></a>蓝牙安全简述</h1><p>上文中叙述了蓝牙协议的基本信息，大致的分类、协议的交互等。下面将针对BLE进行安全方面的分析和阐述，列举出蓝牙可能存在的安全方面的问题。</p>
+<h2 id="蓝牙协议规范中的安全加固"><a href="#蓝牙协议规范中的安全加固" class="headerlink" title="蓝牙协议规范中的安全加固"></a>蓝牙协议规范中的安全加固</h2><p>首先先了解一下在蓝牙的协议规范中是如何保证设备连接安全的。</p>
+<p>根据<a target="_blank" rel="noopener" href="https://developer.bluetooth.org/TechnologyOverview/Pages/LE-Security.aspx">Bluetooth Smart Security</a>中的描述，低功耗蓝牙（BLE）：</p>
+<blockquote>
+provides several features to cover the encryption, trust, data integrity and privacy of the user’s data
+<br>
+(提供了多个特性，包括<code>加密</code>、<code>信任</code>、<code>数据完整性</code>和<code>用户数据隐私性</code>)
+</blockquote>
+
+<p>协议中提供的安全性如下：</p>
+<h3 id="加密"><a href="#加密" class="headerlink" title="加密"></a>加密</h3><p>在两台设备借助蓝牙协议传输数据之前，双方需要完成<code>配对</code>流程。在<code>配对</code>过程中，双方设备通过密钥生成算法生成并交换了的“长效密钥 <code>LTK</code>(Long Term Key)”，作为链路加密的密钥使用。<code>配对</code>流程中可用的模式有：</p>
+<ul>
+<li><p>JUST WORK</p>
+</li>
+<li><p>Passkey Entry（密钥输入）</p>
+</li>
+<li><p>Out Of Band</p>
+</li>
+</ul>
+<p><code>Passkey Entry</code>密钥输入是和老的蓝牙设备（蓝牙2.x）类似的方式，如果<code>从设备</code>有键盘，则需要在键盘上输入一个和<code>主设备</code>相同的密钥，来完成配对和<code>LTK</code>的生成。这个密码被称为<code>PIN码</code>，一般为6位数字。容易存在暴利破解的风险</p>
+<p><code>JUST WORK</code>属于在LE中非常常见的模式，实际上是将<code>Passkey Entry</code>中的输入密钥直接置为’000000‘，从而完成配对和连接的过程。这种方式连接速度快，更适用于IoT领域对连接延时的要求，缺点是<code>PIN码</code>固定，这样就失去了蓝牙原生提供的链路加密的能力，因此如果有敏感数据且没经过有效的加密处理，会造成信息泄露。</p>
+<p><code>Out Of Band</code>这种模式很少见，指的是配对信息不通过蓝牙这个信道传输，而是通过NFC等其他手段传输。</p>
+<div class="tip">
+对于信道加密的实际情况是，大部分的IoT设备都选择了不使用蓝牙协议本身提供的信道加密，而是为了适配各自的服务，在GATT层（蓝牙的应用层）部署自己的加密逻辑，来实现自定义的安全机制。
+</div>
+
+<h3 id="MAC地址随机化"><a href="#MAC地址随机化" class="headerlink" title="MAC地址随机化"></a>MAC地址随机化</h3><p>这个似乎也是官方提供的机制（没有实际确认过，不是很确定），会定期随机的改变设备自身的MAC地址；真实的MAC地址仅允许配对过的设备查看。</p>
+<h3 id="白名单机制"><a href="#白名单机制" class="headerlink" title="白名单机制"></a>白名单机制</h3><p>这个似乎也是官方提供的，允许设置MAC地址白名单，仅允许白名单中的MAC地址的设备连接。</p>
+<h2 id="蓝牙中可能的攻击方式"><a href="#蓝牙中可能的攻击方式" class="headerlink" title="蓝牙中可能的攻击方式"></a>蓝牙中可能的攻击方式</h2><h3 id="针对广播帧-Advertisement-的欺骗攻击"><a href="#针对广播帧-Advertisement-的欺骗攻击" class="headerlink" title="针对广播帧(Advertisement)的欺骗攻击"></a>针对广播帧(Advertisement)的欺骗攻击</h3><p>蓝牙的广播机制在上面已经简单描述过，因为配对的时候需要根据接受到的广播帧(Advertisement)中的数据确定对端设备的MAC地址、设备名等数据，同时有些设备会通过广播帧传输一些数据，或进行信号的监控（<em>这部分不是很确定，目前我并没接触到过通过广播帧传输数据的设备</em>）。因此广播帧可以用来进行欺骗等攻击。</p>
+<p>IoT设备大部分使用电池工作，因此设计的时候都会尽量降低功耗，广播的频率会比较低。因此针对广播帧传输数据的场景下，攻击者可以通过比正常发送频率高很多的频率（通常攻击者会使用能达到的最高频率）来发送伪造的恶意广播帧，来达到欺骗(Spoofing)或者干扰(Jamming)的目的。</p>
+<p>操纵广播帧的攻击场景如下：</p>
+<ol>
+<li><p>智能家居中的拒绝服务攻击</p>
+<p>这里是有两个攻击场景的。第一是“无脑”的拒绝服务，通过广播一个和真实设备一模一样的广播包，欺骗蓝牙网关/智能手机，让其他设备一直尝试与恶意设备连接（在蓝牙网关/智能手机视角里的“恶意设备”实际上就是一个普通设备而已）</p>
+<p>第二个场景，是智能家居的传感器设备通过蓝牙广播的方式发送一些通知数据。此时攻击者可以制作，甚至是重放某些通知数据包。比如某设备会定时广播自己的运行状态，攻击者模拟这个运行状态包，以超高频率广播该设备关机的广播，导致用户查看设备状态时发现设备已关机（实际上运行正常）。</p>
+</li>
+<li><p>距离防盗报警 (Anti-theft proximity)</p>
+<p>先解释一下“距离防盗报警”。这个词我没找到好的翻译方法，自己理解的翻译了一下，就是有一种防盗报警的设备，装在你的行李箱上。当行李箱距离手机等设备超过距离，就会触发警报。</p>
+<p>攻击者通过模拟报警器发送的数据，可以偷偷移动行李箱而不触发报警，手机设备能持续接收到行李箱在附近的蓝牙广播包，因此仍然以为行李箱是在范围内的。</p>
+</li>
+<li><p>信标滥用(Beacon Abuse)</p>
+<p>这个部分涉及到<code>iBeacon</code>之类的技术，基本上是说可以通过模拟发送某个Beacon的数据，来影响使用信标定位的设备，伪造位置。</p>
+</li>
+</ol>
+<h3 id="被动监听-Passive-Interception"><a href="#被动监听-Passive-Interception" class="headerlink" title="被动监听(Passive Interception)"></a>被动监听(Passive Interception)</h3><p>被动监听是无线通信中必然会出现的一种攻击手段，几乎在2018年之前我所看到的所有的蓝牙安全方面的文章中，被动监听发现密码、数据明文传输的占到80%。</p>
+<p>这种攻击方法无需过多说明，使用Ubertooth即可监听到范围内的蓝牙通信数据（类似WiFi适配器的混杂模式）。当有通信处于未加密状态，或者使用”JUST WORK”方式配对，都可以直接看到内容（JUST WORK就是配对码默认’000000’，至于是否真的能监听到，目前还没有试过）</p>
+<h3 id="主动监听-Active-Interception"><a href="#主动监听-Active-Interception" class="headerlink" title="主动监听(Active Interception)"></a>主动监听(Active Interception)</h3><p>主动监听的方式也是一个常见的攻击方式，攻击者可以操纵信道中数据进行<code>转发</code>和<code>丢弃</code>，甚至可以对数据进行<code>篡改</code>。这种攻击方式也被称为<code>中间人攻击</code>/<code>MITM</code>(Man In The Middle attack)</p>
+<p>中间人攻击的场景大致如下：</p>
+<ol>
+<li><p>数据操纵(Data Manipulation)</p>
+<p>这个应该是最概括性的攻击场景的描述。中间人攻击可以决定某条数据是否转发/丢弃，同时还可以对数据的内容进行修改。对于明文传输，或者已知密钥的对称加密的数据传输的场景下，是可以任意伪造、篡改数据，造成危害。</p>
+</li>
+<li><p>命令注入(Command Injection)</p>
+<p>命令注入是数据操纵的一种特殊情况，<em>个人理解属于业务逻辑问题</em>。其中一个例子就是例如蓝牙锁，开锁的过程需要经历：手机端鉴权 -&gt; 锁返回SID -&gt; 手机端发送开锁指令(携带SID)</p>
+<p>在命令注入的攻击场景下，当手机端发送开锁指令时，攻击者选择将该指令修改成其他，如修改认证密码。一旦密码修改成功，攻击者就可以通过新的密码全面接管系统的控制权（Blackhat大会上有人演示过类似的场景）。</p>
+</li>
+<li><p>重放攻击</p>
+<p>实际上重放攻击可以借助被动监听记录数据包再重放出去，但是这里有个有趣的利用方式：比如，某系统没有进行防重放机制，先监听用户的登录认证请求，利用系统回传的SID，加上之前记录的数据，进行数据包的重放，从而破坏系统完整性。</p>
+</li>
+</ol>
+<h3 id="针对暴露服务-Exposed-Services-的攻击"><a href="#针对暴露服务-Exposed-Services-的攻击" class="headerlink" title="针对暴露服务(Exposed Services)的攻击"></a>针对暴露服务(Exposed Services)的攻击</h3><p>上文中简要介绍过了Services的概念。在一般使用过程中，Services和Characteristic是最直接和全面描述一个蓝牙设备能提供能力的途径，而且查询这些属性是无需鉴权和配对的，BLE中，对外暴露的Services是允许任意设备进行查看的。</p>
+<ol>
+<li><p>任意接口的访问</p>
+<p>由于对外暴露的Services允许任意设备查看，因此在不增加额外鉴权和加密的情况下，任意用户都可以对设备提供的数据进行查看，并操纵蓝牙设备。</p>
+</li>
+<li><p>暴力破解</p>
+<p>原生蓝牙协议中没有防止暴力破解的功能，因此在没有<code>软锁定机制(soft-lock)</code>的情况下，存在暴力破解的风险。</p>
+</li>
+<li><p>不恰当的随机数生成</p>
+<p>这个问题不仅在蓝牙通信中存在，实际上是一个广泛的问题。一些没有内建(build-in)随机数生成器的模块，在生成随机数的时候存在<code>伪随机数</code>的情况。因此，在例如“挑战-响应”鉴权(Challange-Response Authentication)中，如果随机数的生成是可预测的，对整个鉴权都会产生影响。</p>
+</li>
+<li><p>额外服务(Excessive Services)无鉴权访问</p>
+<p>设备可能存在额外服务，而这些服务无需鉴权即可访问。</p>
+</li>
+<li><p>模糊测试(Fuzzing)</p>
+<p>通过发送一系列非预期的输入，检查设备是否存在不正常的状态。</p>
+</li>
+<li><p>业务逻辑漏洞(Logical flaws)</p>
+<p>这一项也是比较通用的问题，其实不是蓝牙专属的攻击方式。通过业务逻辑上的错误/失误，对某些操作，比如认证、鉴权等绕过，实现非预期的操作。</p>
+</li>
+</ol>
+<h3 id="针对配对-Pairing-的攻击"><a href="#针对配对-Pairing-的攻击" class="headerlink" title="针对配对(Pairing)的攻击"></a>针对配对(Pairing)的攻击</h3><p>针对配对的攻击，主要的目的是获取设备的“长效密钥（Long Term Key, <code>LTK</code>）”，从而对设备之间传输的数据进行解密、监听。这个攻击方式主要的问题，是蓝牙设备并不检测是否有<code>主动监听</code>或<code>MITM</code>的存在，即使无法连接也不会有安全性提示，导致用户使用过程中很容易在无法连接的时候选择删除配对重连，会连接到攻击者的设备上，从而被监听数据。</p>
+<ol>
+<li><p>JUST WORK</p>
+<p>Just Work因为不需要用户手动输入<code>配对PIN码</code>，因此可以通过设备“克隆“一个设备的信号，进行中间人攻击。</p>
+</li>
+<li><p>有PIN码保护的配对</p>
+<p>通过干扰（Jamming）正常设备的连接过程，迫使用户认为配对出错而删除原有配对并重新配对。攻击者只需要在重新配对的过程中监听配对数据，即可通过被动监听获取交换的密钥，拿到<code>LTK</code>，从而解密后续的所有通信数据。</p>
+</li>
+</ol>
+<p>提供一张Blackhat 2013的Presentation中的一个截图，说明一下配对中密钥破解的原理：</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/2019-06-21_114609.png" alt="密钥破解原理说明"></p>
+<p>几种密钥之间的关系：</p>
+<p><code>TK</code> -&gt; <code>STK</code> -&gt; <code>LTK</code> -&gt; <code>Session keys</code>或<code>Link key</code></p>
+<p><code>TK</code>：Temprarily Key，临时密钥</p>
+<p><code>STK</code>：Short Term Key，短期密钥</p>
+<p><code>LTK</code>：Long Term Key，长期密钥</p>
+<p><code>Link key</code>：或<code>Session key</code>，当前会话的加密密钥</p>
+<h3 id="白名单绕过-Whitelisting-Bypass"><a href="#白名单绕过-Whitelisting-Bypass" class="headerlink" title="白名单绕过(Whitelisting Bypass)"></a>白名单绕过(Whitelisting Bypass)</h3><p>由于蓝牙的白名单机制是通过过滤MAC地址完成的，因此攻击者可以伪造一个白名单中的MAC地址来绕过这一机制。</p>
+<h1 id="个人感悟"><a href="#个人感悟" class="headerlink" title="个人感悟"></a>个人感悟</h1><p>之前接触过一些IoT设备，比如手环类设备、智能门锁等，从目前的产品的实现来看，在连接上都是无需配对，且可用的Services都是暴露的，可以直接向设备发送数据。</p>
+<p>比如某手环，使用LightBlue工具可以直接连接，并且向其服务发送数据可以直接生效，但是要先认证。操作该手环需先认证（具体认证步骤不详述，实际操作中只要用APP连接一次手环即可），通过认证后会绑定认证设备的MAC地址。在数分钟内，通过认证的设备可以直接访问Services中的Characteristic向其发送数据。</p>
+<p>可穿戴设备、智能家居类产品，为了追求连接速度，一般情况下都是无需配对就可以直接访问并进行数据交互，因此这类产品都是靠自定义认证/加密来保证通信安全。因此<strong>认证的逻辑、加密的算法和强度</strong>会直接影响到通信安全。</p>
+<p>但是使用BLE的蓝牙耳机这种设备，比如Sony的某款蓝牙耳机，在首次配对时会生成一个6位随机PIN码发送给手机，使用原生的加密方式来保证传输安全。大致的链接流程如下：</p>
+<p><img src="/2019/06/19/Bluetooth-Low-Energy-BtLE-%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/4.png" alt="Sony某款蓝牙耳机配对过程"></p>
+<blockquote>
+对上图中配对过程的简单分析、解释：
+<p>
+Frame 393: <code>User Confirmation Request</code><br>
+
+</p><p>对端（在此处是蓝牙耳机）请求确认Numeric Value，本地host在收到后确认。因为之前协商过程中有Automatic Accept Allowed的选项，因此手机端不会弹出确认界面。</p>
+<p></p><p>
+Frame 394: <code>User Confirmation Request Reply</code><br>
+相应前一个数据帧，给对端回应，确认之前发送的Numeric Value是正确的。
+</p><p>
+Frame 395: <code>Command Complete</code><br>
+Controller回应，表明之前host的确认消息成功发送。
+</p><p>
+Frame 396: <code>Simple Pairing Complete</code><br>
+表示配对成功。
+</p><p>
+Frame 397: <code>Link Key Notification</code><br>
+Controller通知host，接下来链路加密用的Link Key是什么
+</p><p>
+Frame 398: <code>Authentication Complete</code><br>
+认证结束
+</p>
+</blockquote>
+
+<p>这种配对方式中，在手机连接前会生成<code>STK(Short Term Key)</code>，<code>SK(Session Key)</code>等，因此过程会稍长，更适合于长时间、大量数据的传输，而不适合IoT设备中突发性强、连接时间短、数据量小的传输场景<em>（个人观点）</em>。</p>
+<p>因此，总结起来，IoT领域中的BLE的特点：</p>
+<ul>
+<li><p>一般无需配对</p>
+</li>
+<li><p>有各自制造商设计和实现的认证、加密过程确保安全性</p>
+</li>
+<li><p>服务都是对外暴露的，允许任意设备调用</p>
+</li>
+<li><p>大部分没有使用蓝牙原生的信道加密（即如果制造商没有在“应用层“实现加密，就是明文传输）</p>
+</li>
+</ul>
+<h1 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h1><p>[1] Filizzola, D., Fraser, S.P., &amp; Samsonau, N. (2018). Security Analysis of Bluetooth Technology.</p>
+<p>[2] Jasek, S. (2016). Gattacking Bluetooth smart devices. In <em>Black Hat USA Conference</em>.</p>
+<p>[3] Ryan, M. “Bluetooth Smart: The Good, the Bad, the Ugly, and the Fix.” <em>BlackHat USA, Las Vegas, USA</em> (2013).</p>
+<p>[4] Ryan, M. (2013). Bluetooth: With low energy comes low security. In <em>Presented as part of the 7th {USENIX} Workshop on Offensive Technologies</em>.</p>
+<p>[5] Vainio, J. T. (2000, May). Bluetooth security. In <em>Proceedings of Helsinki University of Technology, Telecommunications Software and Multimedia Laboratory, Seminar on Internetworking: Ad Hoc Networking, Spring</em> (Vol. 5).</p>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1%E7%AE%80%E4%BB%8B"><span class="toc-text">蓝牙通信简介</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%93%9D%E7%89%99%E5%8D%8F%E8%AE%AE"><span class="toc-text">蓝牙协议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8B%93%E6%89%91%E7%BB%93%E6%9E%84"><span class="toc-text">拓扑结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5%E8%BF%87%E7%A8%8B"><span class="toc-text">连接过程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HCI%E7%AE%80%E8%BF%B0"><span class="toc-text">HCI简述</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#HCI-Command-%E5%92%8C-HCI-Event"><span class="toc-text">HCI Command 和 HCI Event</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#GATT%E7%AE%80%E8%BF%B0"><span class="toc-text">GATT简述</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Services%E5%92%8CCharacteristics"><span class="toc-text">Services和Characteristics</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%93%9D%E7%89%99%E5%AE%89%E5%85%A8%E7%AE%80%E8%BF%B0"><span class="toc-text">蓝牙安全简述</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%93%9D%E7%89%99%E5%8D%8F%E8%AE%AE%E8%A7%84%E8%8C%83%E4%B8%AD%E7%9A%84%E5%AE%89%E5%85%A8%E5%8A%A0%E5%9B%BA"><span class="toc-text">蓝牙协议规范中的安全加固</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%A0%E5%AF%86"><span class="toc-text">加密</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MAC%E5%9C%B0%E5%9D%80%E9%9A%8F%E6%9C%BA%E5%8C%96"><span class="toc-text">MAC地址随机化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%99%BD%E5%90%8D%E5%8D%95%E6%9C%BA%E5%88%B6"><span class="toc-text">白名单机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%93%9D%E7%89%99%E4%B8%AD%E5%8F%AF%E8%83%BD%E7%9A%84%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F"><span class="toc-text">蓝牙中可能的攻击方式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%92%88%E5%AF%B9%E5%B9%BF%E6%92%AD%E5%B8%A7-Advertisement-%E7%9A%84%E6%AC%BA%E9%AA%97%E6%94%BB%E5%87%BB"><span class="toc-text">针对广播帧(Advertisement)的欺骗攻击</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A2%AB%E5%8A%A8%E7%9B%91%E5%90%AC-Passive-Interception"><span class="toc-text">被动监听(Passive Interception)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E5%8A%A8%E7%9B%91%E5%90%AC-Active-Interception"><span class="toc-text">主动监听(Active Interception)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%92%88%E5%AF%B9%E6%9A%B4%E9%9C%B2%E6%9C%8D%E5%8A%A1-Exposed-Services-%E7%9A%84%E6%94%BB%E5%87%BB"><span class="toc-text">针对暴露服务(Exposed Services)的攻击</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%92%88%E5%AF%B9%E9%85%8D%E5%AF%B9-Pairing-%E7%9A%84%E6%94%BB%E5%87%BB"><span class="toc-text">针对配对(Pairing)的攻击</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%99%BD%E5%90%8D%E5%8D%95%E7%BB%95%E8%BF%87-Whitelisting-Bypass"><span class="toc-text">白名单绕过(Whitelisting Bypass)</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%B8%AA%E4%BA%BA%E6%84%9F%E6%82%9F"><span class="toc-text">个人感悟</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><span class="toc-text">参考文献</span></a></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2019/06/19/%E4%BD%BF%E7%94%A8Ubertooth%E7%9B%91%E5%90%AC%E8%93%9D%E7%89%99%E9%80%9A%E4%BF%A1/" rel="prev" title="使用Ubertooth监听蓝牙通信">
+            使用Ubertooth监听蓝牙通信
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

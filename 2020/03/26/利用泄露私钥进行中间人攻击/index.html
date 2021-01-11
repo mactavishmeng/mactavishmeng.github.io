@@ -1,0 +1,373 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="MiTM,HTTPS," />
+  
+
+  
+    <meta name="description" content="泄露的网站证书和私钥？来做些有趣的事吧！" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>泄露的网站证书和私钥？来做些有趣的事吧！ [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        泄露的网站证书和私钥？来做些有趣的事吧！
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2020-03-26T13:08:00.000Z">
+        2020-03-26
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/HTTPS/" rel="tag">HTTPS</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/MiTM/" rel="tag">MiTM</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 20 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>网站配套有APP，因为做了SSLPinning，因此用Burpsuite代理抓包会报错：</p>
+<p><code>The client failed to negotiate a TLS connection to xxx.com:443 : Remote host closed connection during handshake</code></p>
+<p>既然这样，利用泄露的证书和私钥来一个“完美”中间人不就行了！</p>
+<a id="more"></a>
+
+<h2 id="基本概念"><a href="#基本概念" class="headerlink" title="基本概念"></a>基本概念</h2><p>在正式实战之前，先介绍一下接下来用到的技术中的一些基本概念：正向代理、反向代理、DNS解析和HTTPS证书。</p>
+<h3 id="正向代理和反向代理"><a href="#正向代理和反向代理" class="headerlink" title="正向代理和反向代理"></a>正向代理和反向代理</h3><p>代理分为正向和反向两种。</p>
+<p><strong>正向代理</strong>，也被称之为转发代理，是一种比较常见的代理方式。一般情况下，正向代理（转发代理）用于某个区域的网络（如公司内网）无法直接访问互联网环境，或者被墙等原因，需要借助正向代理服务器来间接的访问。需要使用正向代理的主机需要配置代理服务器的IP。</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/15372908-cfc6d3fd67598b12.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/830/format/webp" alt="img"></p>
+<p>比如常用的<code>Burpsuite</code>，就可以看做正向代理服务器，在使用的时候需要把浏览器的代理地址配置到<code>Burpsuite</code>指定的IP和端口上，如默认配置的<code>127.0.0.1:8080</code>。</p>
+<p><strong>反向代理</strong>是一种客户端无感知的代理方式，一般用在负载均衡或业务转发的场景中。比如某网站有两台服务器，<code>服务器A</code>为Web服务器，<code>服务器B</code>为邮件服务器。因此在总的出口上配置反向代理，对于<code>http://example.com/web</code>的请求就转发到<code>服务器A</code>，而<code>http://example.com/mail</code>的请求就转发到<code>服务器B</code>。</p>
+<p><img src="/2020/03/26/%E5%88%A9%E7%94%A8%E6%B3%84%E9%9C%B2%E7%A7%81%E9%92%A5%E8%BF%9B%E8%A1%8C%E4%B8%AD%E9%97%B4%E4%BA%BA%E6%94%BB%E5%87%BB/image-20200317193457759.png" alt="2020-03-17_192900"></p>
+<p>总的来说，<strong>正向代理</strong>是隐藏客户端，对于服务器来说发起访问的是代理服务器；而<strong>反向代理</strong>是隐藏了服务端，比如上面的例子中，用户只对<code>http://example.com</code>有感，而对背后的两台实际处理业务的服务器无感。</p>
+<p>反向代理的实现有很多，常见的是<code>Apache</code>或<code>Nginx</code>。</p>
+<p>详细的解释可参见：<a target="_blank" rel="noopener" href="https://blog.csdn.net/hungry0_0/article/details/78928082">代理与反向代理，以及其应用场景</a>和<a target="_blank" rel="noopener" href="https://www.jianshu.com/p/ae76c223c6ef">Nginx正向代理与反向代理</a>。</p>
+<h3 id="HTTPS证书"><a href="#HTTPS证书" class="headerlink" title="HTTPS证书"></a>HTTPS证书</h3><p>HTTPS证书如果展开细说，内容实在有点多，涉及到对称加密、非对称加密、公钥基础设施（PKI）等等概念。此处默认大家已经了解这些概念，不再过多叙述，感兴趣的可参考<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/27395037">HTTPS系列干货（一）：HTTPS 原理详解</a>。</p>
+<p>此处需提及的是，在申请HTTPS证书后，一般会得到两个文件：<code>.crt</code>的证书文件，和<code>.key</code>的私钥文件。证书文件是会在请求的时候发到客户端的，私钥文件是用来解密客户端协商密钥的加密数据的。</p>
+<h3 id="DNS解析"><a href="#DNS解析" class="headerlink" title="DNS解析"></a>DNS解析</h3><p>DNS解析就是将域名转换成IP的过程。因为域名更容易记忆，因此人们日常上网的时候都会去使用域名访问网站，输入域名后就需要把它对应的IP地址检索出来，这一过程就涉及到DNS解析。</p>
+<p>改变DNS解析结果有多种方式：</p>
+<ul>
+<li><p><strong>修改Hosts文件</strong></p>
+<p>这种方法日常会经常用到，比如屏蔽某个软件的广告时就会把广告服务器的域名加入hosts文件，并将其对应的IP设置为<code>0.0.0.0</code>。Hosts文件在Windows中通常位于<code>C:\Windows\System32\drivers\etc\hosts</code>，而Linux一般在<code>/etc/hosts</code>文件夹下。</p>
+</li>
+<li><p><strong>修改DNS服务器地址</strong></p>
+<p>这种方法需要自己搭建一个DNS服务器，将要解析的域名和对应地址写入配置文件，再将系统的DNS服务器地址指向该服务器，这样就可以按照自定义的规则解析域名的地址了。</p>
+</li>
+<li><p><strong>DNS投毒</strong></p>
+<p>DNS投毒一般在局域网攻击中使用，通过ARP攻击引导受害者流量，并响应其中的DNS请求，返回攻击者定义的地址。</p>
+</li>
+</ul>
+<h2 id="攻击准备"><a href="#攻击准备" class="headerlink" title="攻击准备"></a>攻击准备</h2><p>首先，需要事先进行一些准备工作。</p>
+<p>攻击的前提，需要获取到目标站点的私钥文件，即上节中提到的<code>.key</code>文件。实际的测试过程中，很幸运的在某个配置备份文件中发现了，且有效期还有一年多，足以做很多奇奇怪怪的事了~</p>
+<p>其次，构想一下整个攻击的网络模型。由于是一个中间人攻击，因此主要有三方：受害者（<code>victim</code>，简称V），中间人（<code>Man-in-the-Middle</code>，简称M）和服务器（<code>Server</code>，简称S）。主要的思路是，要引导 <code>V</code> 的流量经过 <code>M</code> 转发到 <code>S</code>。其中 <code>M</code> 需要有解开HTTPS密文的能力。</p>
+<p><img src="/2020/03/26/%E5%88%A9%E7%94%A8%E6%B3%84%E9%9C%B2%E7%A7%81%E9%92%A5%E8%BF%9B%E8%A1%8C%E4%B8%AD%E9%97%B4%E4%BA%BA%E6%94%BB%E5%87%BB/image-20200326190216345.png" alt="image-20200326190216345"></p>
+<p>是不是乍一看觉得，这不是<code>Burpsuite</code>或者<code>SSLStrip</code>干的事吗！</p>
+<p>但是！这些工具都有一个致命缺陷：会有“站点不安全”的警告！</p>
+<p><img src="/2020/03/26/%E5%88%A9%E7%94%A8%E6%B3%84%E9%9C%B2%E7%A7%81%E9%92%A5%E8%BF%9B%E8%A1%8C%E4%B8%AD%E9%97%B4%E4%BA%BA%E6%94%BB%E5%87%BB/image-20200324212039174.png" alt="image-20200324212039174"></p>
+<p>如果是日常测试，或者安全研究可以通过<strong>安装证书解决</strong>，但是其他场景下无法安装证书，或者软件做了<strong>HTTPS证书绑定</strong>，这种方式就失效了。</p>
+<p>虽然说证书绑定可以通过各种方法绕过，比如Android App可以用<code>Xposed</code>框架的<code>Just Trust Me</code>、<code>SSL Unpinning</code>之类的插件，但是有些情况下这些通用插件不起作用，又懒得hook（比如我）而“恰巧”获取到了网站证书……</p>
+<p>攻击的拓扑图大致如下：</p>
+<p><img src="/2020/03/26/%E5%88%A9%E7%94%A8%E6%B3%84%E9%9C%B2%E7%A7%81%E9%92%A5%E8%BF%9B%E8%A1%8C%E4%B8%AD%E9%97%B4%E4%BA%BA%E6%94%BB%E5%87%BB/image-20200326191141220.png" alt="image-20200326191141220"></p>
+<p>在 <code>M</code> 上搭建反向代理，并投毒DNS，让 <code>V</code> 访问服务器 <code>example.com</code> 的时候将IP地址解析成 <code>M</code> 的地址。这样流量到达 <code>M</code> 的时候通过反向代理。</p>
+<p>由于反向代理上配置了证书，因此在流量到达时会尝试进行密钥协商，并处理加密流量。此时，反向代理出口的流量即为明文状态，攻击者即可对此部分流量进行拦截、修改和查看等，再转发到真实服务器上。</p>
+<h2 id="实战"><a href="#实战" class="headerlink" title="实战"></a>实战</h2><h3 id="DNS投毒"><a href="#DNS投毒" class="headerlink" title="DNS投毒"></a>DNS投毒</h3><p>上文中提到过，投毒方式有很多种，当然也各有优劣。</p>
+<p><strong>DNS劫持</strong>：在实际攻击中可以使用<code>bettercap</code>进行DNS投毒的操作。这种方法对受害者无感，且无需接触受害者设备。</p>
+<p><strong>修改DNS服务器</strong>：在有接触路由器或受害者设备的情况下可用此种方式。如果路由器自动分配DNS，则可以直接修改规则将分配的首选DNS设置到攻击者布置的DNS服务器的IP上。</p>
+<p>DNS服务器搭建，有条件可以选用<code>Windows Server</code>进行（原生自带），或者使用软件<code>ISC BIND 9</code>来进行，这类教程网上很多，在此不在赘述。</p>
+<p><strong>修改Hosts文件</strong>：一般在本地测试或者验证的时候用这种方式，操作简单，影响面小（仅有本机会被影响）。</p>
+<p>本次实验即选用修改Hosts文件的方式，简单快捷。</p>
+<h3 id="反向代理"><a href="#反向代理" class="headerlink" title="反向代理"></a>反向代理</h3><p>反向代理的架设方法很多，比如利用<code>Nginx</code>或者<code>Apache</code>。由于电脑上装了<code>xampp</code>，本次使用<code>Apache</code>作为反向代理服务器。下面的配置基于<code>xampp v3.2.4</code>的默认配置。</p>
+<ol>
+<li><p>将证书（后缀<code>.crt</code>）和私钥（后缀<code>.key</code>）文件复制到xampp路径下。记住这两个文件的路径。比如：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">F:\xampp\apache\conf\ssl.crt\test.crt</span><br><span class="line">F:\xampp\apache\conf\ssl.key\test.key</span><br></pre></td></tr></table></figure>
+
+<p>这个是按照<code>Apache</code>默认存放证书的位置放进去的。当然放在哪不重要，因为这两个文件的位置是要在配置中指定的。</p>
+</li>
+<li><p>进入<code>xampp</code>安装目录，编辑\apache\conf\httpd.conf`文件，添加配置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">&lt;VirtualHost *:443&gt;</span><br><span class="line">    ServerName  example.com</span><br><span class="line">    ServerAlias example.com</span><br><span class="line">    SSLEngine on</span><br><span class="line">    SSLProxyEngine On</span><br><span class="line">    SSLProxyVerify none</span><br><span class="line">    SSLProxyCheckPeerCN off</span><br><span class="line">    SSLProxyCheckPeerName off</span><br><span class="line">    SSLProxyCheckPeerExpire off</span><br><span class="line">    SSLCertificateFile &quot;F:\xampp\apache\conf\ssl.crt\test.crt&quot;</span><br><span class="line">    SSLCertificateKeyFile &quot;F:\xampp\apache\conf\ssl.key\test.key&quot;</span><br><span class="line">    &lt;Proxy *&gt;</span><br><span class="line">       Order deny,allow</span><br><span class="line">       Allow from all</span><br><span class="line">    &lt;&#x2F;Proxy&gt;</span><br><span class="line">    ProxyPreserveHost On</span><br><span class="line">    ProxyRequests Off</span><br><span class="line">    ProxyPass &#x2F;  https:&#x2F;&#x2F;example.com&#x2F;</span><br><span class="line">    ProxyPassReverse &#x2F; https:&#x2F;&#x2F;example.com&#x2F;</span><br><span class="line">&lt;&#x2F;VirtualHost&gt;</span><br></pre></td></tr></table></figure>
+
+<p>其中<code>example.com</code>是目标服务器的域名，两个文件路径就是第一步拷贝进来的证书和私钥的地址。</p>
+</li>
+<li><p>启动<code>Apache</code>，此时访问<code>https://127.0.0.1</code>，会显示“此站点不安全”的警告，点忽略后会显示<code>example.com</code>(第二步中配置的域名)的内容。</p>
+</li>
+</ol>
+<p>这样就算反向代理配置成功。</p>
+<h3 id="控制流量"><a href="#控制流量" class="headerlink" title="控制流量"></a>控制流量</h3><p>反向代理出口流量就是明文的了，如果不去管它，会自动被代理转发到服务端。因此这里需要一个机制去拦截、查看和修改流量，达到操纵流量的目的。</p>
+<p>本实验在<code>Windows</code>平台下进行，因此使用的是Win平台的软件，Linux平台可找同类软件替换，毕竟真理是不会变的嘛。</p>
+<p><a target="_blank" rel="noopener" href="https://baike.baidu.com/item/proxifier/10859305?fr=aladdin"><strong>Proxifier</strong></a>是一款功能非常强大的socks5客户端，可以让不支持通过代理服务器工作的网络程序能通过HTTPS或SOCKS代理或代理链。通过这个软件，可以将<code>Apache</code>中的流量转发出来。</p>
+<p>关于这个软件的安装使用不过多做介绍，只说一下<strong>代理规则</strong>的配置。这里对<code>Apache</code>的全部流量进行拦截，因此在“应用程序”栏中填写<code>httpd.exe</code>（这个是<code>Apache</code>处理请求的进程），如下：</p>
+<p><img src="/2020/03/26/%E5%88%A9%E7%94%A8%E6%B3%84%E9%9C%B2%E7%A7%81%E9%92%A5%E8%BF%9B%E8%A1%8C%E4%B8%AD%E9%97%B4%E4%BA%BA%E6%94%BB%E5%87%BB/image-20200326200451393.png" alt="image-20200326200451393"></p>
+<p>流量最终是被代理到<code>Burpsuite</code>上，因为这款软件对数据包修改比较友好，比如<code>Repeater</code>、<code>Intruder</code>等模块都可以方便的对请求进行重放、暴破等。</p>
+<h3 id="流量操纵"><a href="#流量操纵" class="headerlink" title="流量操纵"></a>流量操纵</h3><p>这部分其实不用过多介绍，运行起来之后只需要在<code>Burpsuite</code>中查看获取的流量并进行操作即可。</p>
+<p>至此，整个中间人过程完毕，虽然有点繁琐（反代接<code>Proxifier</code>再接<code>Burp</code>），应该可以再优化，但奈何本人才疏学浅，只能想到这种方式来利用，希望有大神可以指点。</p>
+<p>在中间人端（<code>M</code>端）流量的关系如下：</p>
+<p><img src="/2020/03/26/%E5%88%A9%E7%94%A8%E6%B3%84%E9%9C%B2%E7%A7%81%E9%92%A5%E8%BF%9B%E8%A1%8C%E4%B8%AD%E9%97%B4%E4%BA%BA%E6%94%BB%E5%87%BB/image-20200326202158832.png" alt="image-20200326202158832"></p>
+<h2 id="结语"><a href="#结语" class="headerlink" title="结语"></a>结语</h2><p>这种中间人攻击的方式利用难度很大，但是可以完美的对抗证书认证类的校验，比如APP校验服务端证书。可以利用的场景也比较有限（临近网络）。</p>
+<p>写此文的目的有两个，一是分享一下整个攻击的过程，毕竟这种类型的攻击并没有太多提及；二是提醒一下泄露了网站证书的管理员，不要以为仅仅删除了泄露出去的备份文件就安全了，证书泄露的后果还是很严重的。</p>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="toc-text">基本概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%A3%E5%90%91%E4%BB%A3%E7%90%86%E5%92%8C%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86"><span class="toc-text">正向代理和反向代理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#HTTPS%E8%AF%81%E4%B9%A6"><span class="toc-text">HTTPS证书</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DNS%E8%A7%A3%E6%9E%90"><span class="toc-text">DNS解析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%94%BB%E5%87%BB%E5%87%86%E5%A4%87"><span class="toc-text">攻击准备</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E6%88%98"><span class="toc-text">实战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DNS%E6%8A%95%E6%AF%92"><span class="toc-text">DNS投毒</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86"><span class="toc-text">反向代理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A7%E5%88%B6%E6%B5%81%E9%87%8F"><span class="toc-text">控制流量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E9%87%8F%E6%93%8D%E7%BA%B5"><span class="toc-text">流量操纵</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E8%AF%AD"><span class="toc-text">结语</span></a></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2019/06/26/Root-me-Web-Server-WriteUp/" rel="next" title="Root-me Web-Server WriteUp">
+          Root-me Web-Server WriteUp
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2020/03/31/Python3%E7%8E%AF%E5%A2%83%E4%B8%8B%E7%9A%84Brida%E6%8F%92%E4%BB%B6%E9%85%8D%E7%BD%AE/" rel="prev" title="Brida 不完全折腾手册">
+            Brida 不完全折腾手册
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

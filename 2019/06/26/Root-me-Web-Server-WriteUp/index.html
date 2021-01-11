@@ -1,0 +1,463 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="web安全,writeup," />
+  
+
+  
+    <meta name="description" content="Root-me Web-Server WriteUp" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>Root-me Web-Server WriteUp [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        Root-me Web-Server WriteUp
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2019-06-26T02:48:24.000Z">
+        2019-06-26
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/web%E5%AE%89%E5%85%A8/" rel="tag">web安全</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/writeup/" rel="tag">writeup</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 24 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>最近在做<a target="_blank" rel="noopener" href="https://www.root-me.org/">Root-me</a>的题，顺手记一下相关的题目的解题思路，顺便梳理一下各个知识点。</p>
+<p>我是按照Validations从高到低的顺序做的，和我刷LeetCode的习惯保持了一致=。=</p>
+<a id="more"></a>
+
+<ol>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/HTML-source-code">HTML - source code</a></p>
+<p>这道题不难，右键查看源码即可</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/Weak-password">Weak password</a></p>
+<p>祖传老密码，admin/admin 轻松拿到password</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/HTTP-User-agent">HTTP - User-agent</a></p>
+<p>题目中已经给出了tips，正常访问会显示 <code>Wrong user-agent: you are not the &quot;admin&quot; browser!</code>，修改HTTP请求的头部<code>User-agent</code>字段，值为<code>admin</code>即可得到password</p>
+</li>
+<li><p>这一题也不难，查看源码有个<code>include</code>的注释，提示了<code>admin/pass.html</code>，在地址栏里加上admin这个路径，可以看到列出的目录，进入<code>/admin/backup/admin.txt</code>成功读取password</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/Backup-file">Backup file</a></p>
+<p>这道题着实卡住了，尝试了各种备份文件的名字和后缀，都没成功。没忍住看了网上的解题思路：</p>
+<blockquote>
+1. 产生其他扩展名：.zip，.bak，.tar，.gz等
+<br>
+2. 编辑器生成了临时文件：file~
+<br>
+3. 老文件：file.old
+</blockquote>
+
+<p>所以这题的备份文件是index.php~，输入后得到源码，获取到password。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/HTTP-Headers">HTTP - Headers</a></p>
+<p>依然是题目给了提示，查看Response头，发现有个字段<code>Header-RootMe-Admin</code>，尝试在Request中添加这个头，值任意，发送过去得到password</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/HTTP-Open-redirect">HTTP - Open redirect</a></p>
+<p>这题有点意思，点开之后发现是三个跳转的链接，每个链接都是在当前页面的url后面附了参数：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&#x27;?url=https://facebook.com&amp;h=a023cfbf5f1c39bdf8407f28b60cd134&#x27;</span>&gt;</span>facebook<span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>尝试修改参数里<code>url</code>那个部分，比如替换成<code>https://baidu.com</code>，访问之后发现仍然是没有加参数的那个页面的内容。后面的参数<code>h</code>引起了注意，看起来很像md5的值，找了个md5生成器验证了下，果然这个参数<code>h</code>是前面<code>url</code>的md5</p>
+<p>将<code>url</code>替换成其他，如baidu，算一下md5，结果得到一个完整的链接：</p>
+<blockquote>
+http://challenge01.root-me.org/web-serveur/ch52/?url=https://baidu.com&h=bb6e082d5c360ce6a0c64f926feea905
+</blockquote>
+访问，页面显示出flag。
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/PHP-Command-injection">PHP - Command injection</a></p>
+<p>很简单的一个PHP命令注入，按照页面的提示输入参数127.0.0.1，会执行Ping这个命令。直接在输入框中输入：<code>127.0.0.1 &amp;&amp; ls -la</code>，发现可以列出当前文件夹里的文件。</p>
+<p>首先想到了去看下这个php页面的源码，因此注入：<code>127.0.0.1 &amp;&amp; cat index.php</code>，F12查看HTML代码，发现在<code>&lt;pre&gt;</code>标签中存在一个注释，得到password。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/Install-files">Install files</a></p>
+<p>题目中给出了提示，You know phpBB? 第一感觉这应该是一个CMS，题目又叫做install files，自然想到了去找install.php。</p>
+<p>打开题目的页面，F12看一下，发现一个注释：</p>
+<blockquote>
+<pre>
+    &lt!-- /web-serveur/ch6/phpbb -->
+</pre>
+</blockquote>
+
+<p>果断访问一下，发现首页是空白的。惯例去访问一下install.php，结果404。去掉后缀，访问install目录，居然展示出目录里的文件，看到有install.php。最终的URI是：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/phpbb/install/install.php</span><br></pre></td></tr></table></figure>
+
+<p>访问页面，直接展示出password。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/HTTP-verb-tampering">HTTP - verb tampering</a></p>
+<p>这个漏洞之前没有太关注过，查了下叫做HTTP动词篡改，其实就是HTTP方法（HTTP Method）部分在服务端检查不严格，支持危险的（PUT / DELETE / TRACE / MOVE / COPY / PROPFIND / MKCOL / LOCK / UNLOCK等）方法，或没有对这些支持的方法进行严格的判断，从而造成的越权、文件上传、认证绕过等后果。</p>
+<p>因此只需要把访问的method随便换一个就好了，比如：</p>
+<p><img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-26_143359.png" alt="Firefox插件发送自定义method的HTTP请求"></p>
+<p>返回值中成功拿到password</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/HTTP-cookies">HTTP - cookies</a></p>
+<p>打开页面，看到Saved email address这样一个链接，点进去页面刷新，显示<code>You need to be admin</code>。</p>
+<p>F12查看页面元素，看到一个注释，<code>SetCookie(&quot;ch7&quot;, &quot;visiteur&quot;)</code>，再去查看浏览器的Cookie，发现有ch7这个键对应visiteur的值。按照提示修改Cookie的值为admin，重新点击Saved email addresses，获得password。</p>
+<p>吐槽下，这个地方addresses居然拼错了~</p>
+<p><img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-26_145111.png" alt="页面中注释的setcookie"></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="http://challenge01.root-me.org/web-serveur/ch32/">HTTP - Improper redirect</a></p>
+<p>这题点进去访问的页面会返回的Response Headers里有一项叫Location，进行重定向。所以直接查看是看不到东西的，使用Burp抓包，可以看到flag：</p>
+<p><img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-28_153956.png" alt="重定向的Response中的内容"></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="http://challenge01.root-me.org/web-serveur/ch15/ch15.php">Directory traversal</a></p>
+<p>这题思路也比较简单，既然提示了路径遍历，那就先随便点一下看看URL的构成，比如选<code>devices</code>这个文件夹，URL是<code>http://challenge01.root-me.org/web-serveur/ch15/ch15.php?galerie=devices</code></p>
+<p>替换<code>galerie</code>的值为<code>./</code>，看下当前文件夹下有什么：<img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-28_154519.png" alt="根文件夹列出的内容"> 这里<code>86hwnX2r</code>引起注意，再尝试读这个文件夹，将86hwnX2r拼接到URL后面，又发现了奇怪的东西：<img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-28_154939.png" alt="发现目标文件"> 尝试访问这个文件，得到password。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/File-upload-double-extensions">File upload - double extensions</a></p>
+<p>已经提示了是双重扩展的问题，上传一个后缀为<code>.php.png</code>的文件即可。我用了AntSword进行连接，使用一句话PHP。</p>
+<p>连上之后跳转到当前网站的根（ch20这个文件夹），下载<code>.passwd</code>文件，打开即得到password：<img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-28_192534.png" alt="使用AntSword连接"> </p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/CRLF">CRLF</a></p>
+<p>这题实际上有点脑洞，不过提示中说，<code>Inject false data in the journalisation log.</code>，就是让我们在下面的log中注入一条成功登录的日志。</p>
+<p>看日志打印的情况，应该就是把用户名读进去在打印出来，而且每行显示一条日志。日志的格式是：<code>用户名</code> + failed to authenticate. 这样的话只需要让用户名为<code>admin authenticate.\r\nadmin</code>即可。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/HTTP-POST">HTTP - POST</a></p>
+<p>这题打开点一下按钮，发现是发送一个数据，要求是要超过<code>999999</code>。F12看下network，发现数据是本地POST过去。</p>
+<p>再F12 Element查看页面，在form的<code>onsubmit</code>方法里有个随机数，<code>Math.random() * 1000001</code>，修改掉这个值，这里我去掉了前面的<code>Math.random()</code>，这样发送的数据就是<code>1000001</code>。</p>
+<p>此时点击Give a try,成功得到了password。<img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-28_194503.png"></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/File-upload-MIME-type">File upload - MIME type</a></p>
+<p>这题就是单纯的在MIME type上进行了限制，将上传数据中的Content-type改成<code>image/png</code>即可。<img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-06-28_195118.png" alt="burpsuite中修改Content type">  </p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/File-upload-null-byte">File upload - null byte</a></p>
+<p>这题的名字有点奇怪，但其实就是<code>%00</code>截断。按照上题，将文件名变成<code>payload.php%00.png</code>，上传后去访问payload.php即可。</p>
+<p>这里识别到上传成功后，系统会删除该文件，直接给你返回password</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/PHP-filters">PHP - filter</a></p>
+<p>这题是一个php包含的漏洞。进入题目看url中有参数，尝试改一下，报错发现是include了参数。但是这里限制了include路径，不能任意include文件。</p>
+<p>因此想看下login.php中是如何验证用户名和密码的，因此目的是要把login.php的源码打出来。</p>
+<p>使用php://filter将文件编码成base64在include即可打印出来。<code>php://filter/convert.base64-encode/resource=filepath</code></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/SQL-injection-string">SQL injection - string</a></p>
+<p>这题依然是SQLI，首先思路是找注入点（用单引号去试，比如<code>&#39;1</code>），在<code>search</code>页面中发现注入点。</p>
+<p>此时使用<code>union</code>关键字去进行参数的拼接，因为<code>union</code>的时候需要字段数与原SQL语句一致，我使用类似<code>&#39;union select 1,1,1 --</code>的语句，更换1的数量来试出原语句中的字段数。</p>
+<p>从报错信息中可以看到它用的是sqlite3，因此思路是去读sqlite3的系统表<code>sqlite_master</code>，先看下数据库里有哪些数据表以及表结构。<code>sqlite_master</code>的结构如下：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> sqlite_master ( </span><br><span class="line"><span class="keyword">type</span> <span class="built_in">TEXT</span>, </span><br><span class="line"><span class="keyword">name</span> <span class="built_in">TEXT</span>, </span><br><span class="line">tbl_name <span class="built_in">TEXT</span>, </span><br><span class="line">rootpage <span class="built_in">INTEGER</span>, </span><br><span class="line"><span class="keyword">sql</span> <span class="built_in">TEXT</span> </span><br><span class="line">); </span><br></pre></td></tr></table></figure>
+
+<p>因此第一阶段的payload入下：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1&#x27; or 1=1 union <span class="keyword">select</span> <span class="keyword">name</span>,<span class="keyword">sql</span> <span class="keyword">from</span> sqlite_master <span class="comment">--</span></span><br></pre></td></tr></table></figure>
+
+<p><img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-07-09_141226.png" alt="SQL注入得到的表信息"></p>
+<p>发现了<code>user</code>表以及其字段<code>username</code>, <code>password</code>，这样就可以去构建union语句来读取数据了：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1&#x27; or 1=1 union <span class="keyword">select</span> username, <span class="keyword">password</span> <span class="keyword">from</span> <span class="keyword">users</span> <span class="comment">--</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/PHP-register-globals">PHP - register globals</a></p>
+<p>Register Globals是PHP的一个特性，在<code>4.2.0</code>版本之前默认开启，<code>5.3.0</code>版本废弃，<code>5.4.0</code>版本彻底移除。简单来说，开启这个特性之后，PHP允许代码中的变量用除了在代码中赋值的方式以外进行初始化（赋值）。</p>
+<p>按照官方手册的例子来说，PHP允许从请求中对变量进行初始化，也就是说可以通过在URL中以<code>?key=var</code>的形式来给变量进行赋值，从而改变原本代码的逻辑结构。具体可以参考<a target="_blank" rel="noopener" href="https://php.net/manual/zh/security.globals.php">PHP官方手册</a>。</p>
+<p>想要利用变量覆盖进行攻击，需要知道具体的代码逻辑和变量名称。题目中给出了提示：<code>It seems that the developper often leaves backup files around...</code>，说明有隐藏的源码。猜一下文件名，<code>index.php.bak</code>，成功下载到备份文件。</p>
+<p>看一下代码逻辑，发现其核心语句如下：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (( <span class="keyword">isset</span> ($password) &amp;&amp; $password!=<span class="string">&quot;&quot;</span> &amp;&amp; auth($password,$hidden_password)==<span class="number">1</span>) || (is_array($_SESSION) &amp;&amp; $_SESSION[<span class="string">&quot;logged&quot;</span>]==<span class="number">1</span> ) )&#123;</span><br><span class="line">    $aff=display(<span class="string">&quot;well done, you can validate with the password : $hidden_password&quot;</span>);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    $aff=display(<span class="string">&quot;try again&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>这里有个<code>||</code>，那么只要符合其中之一的条件即可。看后半段的条件，只要<code>$_SESSION[&quot;logged&quot;]</code>的值为<code>1</code>即可，结合上面变量覆盖，构造出<code>index.php?_SESSION[&quot;logged&quot;]=1</code>即可。</p>
+<p>尝试之后发现并没有用，考虑可能是双引号被过滤，修改为<code>index.php?_SESSION[logged]=1</code>顺利执行。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/SQL-injection-numeric">SQL injection - numeric</a></p>
+<p>又是一道SQLI的题目，这次的主题是数字型的注入。按照题目的内容来看，注入点应该是在新闻条目的id处。尝试加一个<code>&#39;</code>，成功引发报错。</p>
+<p>因为是数字型的注入，因此原语句应该是类似于<code>select xx from xxx where id=1 ...</code>这样的，因此注入的时候使用<code>1 union select 1,1,1 --</code>先试探一下。剩下的内容和上面字符型注入是一样的。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/PHP-assert">PHP - assert()</a></p>
+<p>这题的目的是读取到<code>.passwd</code>这个文件。点开题目，看到url中有<code>?page=about</code>这样的字样，感觉有文件包含。随意改一个名字，比如<code>about1</code>，报错信息提示<code>&#39;includes/about5.php&#39;File does not exist</code>。说明它加载的时候是在输入的文件名后面加了个<code>.php</code>的后缀。</p>
+<p>再尝试一下路径遍历，输入<code>../index</code>，得到另一个报错：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Warning: assert(): Assertion &quot;strpos(&#39;includes&#x2F;..&#x2F;index.php&#39;, &#39;..&#39;) &#x3D;&#x3D;&#x3D; false&quot; failed in &#x2F;challenge&#x2F;web-serveur&#x2F;ch47&#x2F;index.php on line 8</span><br><span class="line">Detected hacking attempt!</span><br></pre></td></tr></table></figure>
+
+<p>这里就可以猜到，assert语句大概应该是：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">assert(<span class="string">&quot;strpos(&#x27;includes/$&#123;input&#125;.php&#x27;, &#x27;..&#x27;) === false&quot;</span>)</span><br><span class="line">&#123;</span><br><span class="line">    $file = <span class="string">&#x27;includes/$&#123;input&#125;.php&#x27;</span>;</span><br><span class="line">    <span class="keyword">if</span>(exist($file))</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">//正常加载的代码</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">//不包含 .. ，但是文件不存在</span></span><br><span class="line">        <span class="keyword">echo</span> $file . <span class="string">&quot; File does not exist&quot;</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">//输入中包含 .. ，有路径遍历</span></span><br><span class="line">    <span class="keyword">echo</span> $&#123;input&#125; . <span class="string">&quot;Detected hacking attempt!&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>因此尝试用输入将assert里面的语句截断，尝试一下<code>&#39;, &#39;aaa&#39;) || strpos(&#39;</code>，发现回显是说 File does not exist，说明已经成功闭合了assert里面的字符串，说明这里是可以进行注入的。</p>
+<p>尝试一下打印<code>phpinfo</code>：<code>&#39;, &#39;aaa&#39;) ||phpinfo()|| strpos(&#39;</code>，成功。</p>
+<p>那直接打印<code>.passwd</code>文件即可，<code>&#39;, &#39;aaa&#39;) ||var_dump(file_get_contents(&#39;.passwd&#39;))|| strpos(&#39;</code>。这里不能使用<code>echo</code>，因为它没有返回值，因此<code>var_dump</code>或者<code>print_r</code>都可以。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/Local-File-Inclusion-Double-encoding">Local File Inclusion - Double encoding</a></p>
+<p>这道题和php - filter那题类似，目标是读取源码，<code>include</code>语句包含了在URL中的参数。</p>
+<p>第一个想法是构造一个filter语句，去读取页面的base64编码后的源码：<code>?page=php://filter/convert.base64-encode/resource=home</code>。直接输入，页面返回：<code>Attack detected.</code></p>
+<p>此时想到题目给出的提示，进行URL编码，两次编码，实际上第二次编码只是把<code>%</code>编码成<code>%25</code>。</p>
+<p>再次发送两次编码的payload，依然提示<code>Attack detected.</code></p>
+<p>思考一下，发现在payload中的<code>convert.base64-encode</code>中有个<code>.</code>，一般情况下URL编码默认是不会对这个符号进行编码，手动编码，把 点 替换成<code>%252e</code>，执行成功。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/Remote-File-Inclusion">Remote File Inclusion</a></p>
+<p>本题的目的是读取<code>index.php</code>的源码。</p>
+<p>首先进入页面，看到切换语言的时候url发生了变化，<code>?lang=en</code>参数控制语言的类型。尝试修改一下这个值，比如变成<code>?lang=en1</code>，会有错误提示，可以看出这里是用了<code>include(&#39;$&#123;input&#125;_lang.php&#39;)</code>这样的语句进行include的。</p>
+<p>尝试去include<code>index.php</code>，发现include的目录被限制在<code>.:/usr/share/php</code>，没法猜出来<code>index.php</code>的路径。这里虽然是补了后缀，但是可以用<code>%00</code>截断的方式来屏蔽后面的部分，比如<code>?lang=index.php%00</code>。</p>
+<p>尝试用<code>php://filter</code>的方式去加载<code>en_lang.php</code>，里面没有什么重要的内容。那么LFI应该是不能达到目的了。</p>
+<p>尝试RFI，将参数写成一个远程地址，比如<code>https://www.baidu.com</code>，但是注意在include语句中后面还有个<code>_lang.php</code>，所以这里需要构造参数为<code>?lang=https://www.baidu.com?</code>，来把后面的部分作为参数，访问后打开了百度的页面。</p>
+<p><img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-07-09_192154.png" alt="RFI打开的baidu页面"></p>
+<p>到了这一步就已经很明显了，只要找一个页面内容为<code>&lt;?php echo file_get_contents(&#39;index.php&#39;);?&gt;</code>的远程页面，将url填在参数部分即可。</p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://www.root-me.org/en/Challenges/Web-Server/Java-Server-side-Template-Injection">Java - Server-side Template Injection</a> </p>
+<p>这个问题是由于服务端对输入没有进行合理过滤导致用户输入作为模板执行。</p>
+<p>首先就是要确定用的是什么模板，Burpsuite官方，PortSwigger有篇博文描述了一种简单的检测方法：<a target="_blank" rel="noopener" href="https://portswigger.net/blog/server-side-template-injection">Server-Side Template Injection</a>，部分截图如下：</p>
+<p><img src="/2019/06/26/Root-me-Web-Server-WriteUp/2019-07-09_194016.png" alt="Burpsuite博客中给出的"></p>
+<p>然而根据这张表的内容似乎没法判断这题用的模板。但是，当我输入到<code>$&#123;&quot;z&quot;.join(&quot;ab&quot;)&#125;</code>用例的时候，引发了模板报错，页面上显示的是<code>An error occurs!</code>，赶紧打开F12 - Network，看下网络交互，发现返回值是<code>500</code>，内容里有一句<code>exception: &quot;freemarker.core.ParseException&quot;</code>，查了下<code>freemarker</code>就是一个Java的模板。</p>
+<p>确定了模板，就可以利用模板构建payload了。</p>
+<p>Baidu一下：<code>freemarker 执行系统命令</code>，</p>
+</li>
+</ol>
+<ol start="27">
+<li></li>
+</ol>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2019/06/25/RFID%E6%94%BB%E5%87%BB%E6%96%B9%E6%B3%95%E6%A2%B3%E7%90%86/" rel="next" title="RFID攻击方法梳理">
+          RFID攻击方法梳理
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2020/03/26/%E5%88%A9%E7%94%A8%E6%B3%84%E9%9C%B2%E7%A7%81%E9%92%A5%E8%BF%9B%E8%A1%8C%E4%B8%AD%E9%97%B4%E4%BA%BA%E6%94%BB%E5%87%BB/" rel="prev" title="泄露的网站证书和私钥？来做些有趣的事吧！">
+            泄露的网站证书和私钥？来做些有趣的事吧！
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

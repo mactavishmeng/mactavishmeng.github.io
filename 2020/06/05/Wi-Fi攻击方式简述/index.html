@@ -1,0 +1,459 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="Wi-Fi," />
+  
+
+  
+    <meta name="description" content="Wi-Fi攻击方式简述" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>Wi-Fi攻击方式简述 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.0.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/search" class="pure-menu-link">搜索</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a target="_blank" rel="noopener" href="https://0xff000000.com" class="pure-menu-link">关于</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        Wi-Fi攻击方式简述
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2020-06-05T08:53:41.000Z">
+        2020-06-05
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Wi-Fi/" rel="tag">Wi-Fi</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 35 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>Wi-Fi安全是一个老生常谈的问题了，各种攻击方式也被总结的很多了，但大部分都在说原理和流程，很少有深入到细节分析的。</p>
+<a id="more"></a>
+
+<p><strong>Wi-Fi</strong>（发音： [/ˈwaɪfaɪ/]），又称“无线热点”或“无线网络”，是Wi-Fi联盟的商标，一个基于IEEE 802.11标准的无线局域网技术[1]。IEEE 802.11是IEEE 802标准委员会（IEEE 802 LAN/MAN Standards Committee）下属的无线局域网工作组，也指代由该组织制定的无线局域网标准[2]。目前我们常用的Wi-Fi标准为802.11 a/b/g/n/ac这5中，其中802.11 b/g/n 在 2.4GHz频段使用较多，近几年来兴起的5GHz则是以 802.11 n/ac为主。</p>
+<h2 id="802-11协议"><a href="#802-11协议" class="headerlink" title="802.11协议"></a>802.11协议</h2><p>802.11协议的初始版本发布于1997年，随后对无线传输的速率、安全性等不断进行更新，发布了众多的协议和版本。其中我们生活中普遍接触的有802.11 a/b/g/n/ac这几种协议。</p>
+<table>
+<thead>
+<tr>
+<th>协议</th>
+<th>频率</th>
+<th>调制方式</th>
+<th>最大传输速率</th>
+<th>发布时间</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>802.11</td>
+<td>2.4Ghz</td>
+<td>FHSS ， DSSS</td>
+<td>2Mbps</td>
+<td>1997</td>
+</tr>
+<tr>
+<td>802.11a</td>
+<td>5GHz</td>
+<td>OFDM</td>
+<td>54Mbps</td>
+<td>1999</td>
+</tr>
+<tr>
+<td>802.11b</td>
+<td>2.4GHz</td>
+<td>DSSS</td>
+<td>11Mbps</td>
+<td>1999</td>
+</tr>
+<tr>
+<td>802.11g</td>
+<td>2.4GHz</td>
+<td>DSSS，OFDM</td>
+<td>54Mbps</td>
+<td>2003</td>
+</tr>
+<tr>
+<td>802.11n</td>
+<td>2.4GHz或5GHz</td>
+<td>MIMO-OFDM</td>
+<td>150Mbps(单条流，40M频宽)</td>
+<td>2009</td>
+</tr>
+<tr>
+<td>802.11ac</td>
+<td>2.4GHz或5GHz</td>
+<td>MIMO-OFDM</td>
+<td>866.7Mbps(单条流，160M频宽)</td>
+<td>2013</td>
+</tr>
+</tbody></table>
+<p>在主流家用路由器的无线设置中都支持修改协议。</p>
+<h2 id="802-11无线帧"><a href="#802-11无线帧" class="headerlink" title="802.11无线帧"></a>802.11无线帧</h2><p>对于不同的802.11协议，其区别主要集中在物理层对数据的编码、调制、MIMO支持上，而在设备接入、认证方面几乎是相同的。</p>
+<p>下图为802.11无线帧的格式，该帧位于数据链路层。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/xxMACFrameFormat.png" alt="img"></p>
+<p>其中，<code>MAC Header</code>部分为帧的控制字段，表示帧类型、源目的地址等；<code>Frame Body</code>部分则是承载的数据，其内容会根据帧类型而有所不同；<code>FCS</code>是“Frame Check Sequence（帧校验序列）”的缩写，保证帧的完整性。</p>
+<p><code>MAC Header -&gt; Frame Control -&gt; Type</code>定义了当前帧的分类。802.11无线帧中有三种帧类型：数据帧、控制帧和管理帧。</p>
+<p><strong>数据帧</strong>主要是传输数据、进行ACK响应、QoS等；<strong>控制帧</strong>主要控制传输速率、协商信道以及保证信道畅通（实现CSMA/CA载波侦听/冲突避免）；而<strong>管理帧</strong>则是负责站点的探测、关联认证、解除关联等动作，这部分也是大部分Wi-Fi安全关注的部分。</p>
+<p>下面就详细说明一下802.11管理帧。</p>
+<p>管理帧的类型如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Association Request(关联请求)</span><br><span class="line">Association Response (关联响应)</span><br><span class="line">Reassociation Request(重关联请求)</span><br><span class="line">Reassociation Response(重关联响应)</span><br><span class="line">Probe Request(探测请求)</span><br><span class="line">Probe Response(探测响应)</span><br><span class="line">Beacon(信标帧)</span><br><span class="line">ATIM(通知传输指示信息)</span><br><span class="line">Disassociation(解除关联)</span><br><span class="line">Authentication(身份验证)</span><br><span class="line">Deauthentication(解除身份验证)</span><br></pre></td></tr></table></figure>
+
+<p>站点接入基站的过程主要分为四步：扫描（获取附近基站信息）、连接（身份认证）、传输（与基站交换信息）、断开。</p>
+<p>先引入一个全局视图：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200623100438495.png" alt="image-20200623100438495"></p>
+<h2 id="扫描阶段"><a href="#扫描阶段" class="headerlink" title="扫描阶段"></a>扫描阶段</h2><p>扫描对于用户操作来说直观感受就是打开Wi-Fi列表，看到设备发现附近热点的名称。扫描分为两种方式，<strong>主动扫描和被动扫描</strong>。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200619150224845.png" alt="image-20200619150224845"></p>
+<h3 id="主动扫描"><a href="#主动扫描" class="headerlink" title="主动扫描"></a>主动扫描</h3><p>主动扫描指的是站点在对应信道上主动广播一个探测请求（Probe Request），并等待基站的响应。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200610101310303.png" alt="image-20200610101310303"></p>
+<p>在发送Probe Request帧时，其中<code>SSID</code>字段若<strong>有指定的字符</strong>，则称为 “Directed probe（直接探测）”，此时若该信道上存在对应SSID名称的基站则会发送探测响应；而<code>SSID</code>字段为<code>NULL</code>时，该帧称为 “Broadcast probe（广播探测）”，对应信道上所有接收到这个帧的基站均会发送探测响应。</p>
+<p>在主动扫描模式下，由于站点会广播Probe Request帧，如果攻击者违背协议规定，对所有收到的Probe Request进行响应，则会造成<strong>Wi-Fi钓鱼</strong>的攻击。具体例子可以参考《<a target="_blank" rel="noopener" href="https://www.freebuf.com/articles/77055.html">WiFi Pineapple的Karma攻击与原理探究</a>》、《<a target="_blank" rel="noopener" href="https://www.freebuf.com/articles/wireless/145259.html">聊聊WiFi Hacks：为何你的Karma攻击不好使了</a>》。</p>
+<h3 id="被动扫描"><a href="#被动扫描" class="headerlink" title="被动扫描"></a>被动扫描</h3><p>被动扫描是通过被动接受基站定期发送的Beacon包来发现周围热点的方式。一般来说，使用被动扫描可以有效规避Wi-Fi钓鱼的攻击。然而站点（无线客户端）在收到的Beacon包中如果发现自己连接过的SSID，则会尝试连接。利用这种特性，如果攻击者尝试大量枚举SSID，尤其是公共Wi-Fi的SSID（如星巴克、麦当劳、肯德基等）则依然可以实现Wi-Fi钓鱼攻击（参见《<a target="_blank" rel="noopener" href="https://www.freebuf.com/articles/wireless/44378.html">主动触发被动模式从而挟持无线客户端 – Passive Karma Attack</a>》）。</p>
+<p>此外，利用扫描阶段的机制，可以进行<strong>伪AP（Rouge AP）</strong>攻击。伪AP主要通过设置一个与真实AP名称、加密方式、密码都相同的热点，并利用无线客户端在扫描到多个名称和加密方式相同的热点时会优先选择信号最好的连接这一特性，引导无线客户端连接到攻击者设置的伪AP上，进而进行中间人、嗅探等一系列攻击。其实现原理可参见《<a target="_blank" rel="noopener" href="https://www.docin.com/p-1668171406.html">基于伪AP的无线局域网中间人攻击方法及隐患分析</a>》，搭建方法可参见《<a target="_blank" rel="noopener" href="https://www.freebuf.com/news/141977.html">无线安全课堂：手把手教会你搭建伪AP接入点</a>》。</p>
+<h3 id="相关工具"><a href="#相关工具" class="headerlink" title="相关工具"></a>相关工具</h3><p><strong>Kismet</strong></p>
+<p>Kismet是802.11 数据链路层的扫描器和嗅探器。它会将无线网卡设置为Monitor Mode，监听并记录附近所有的无线流量，分析热点和设备的配对关系等。详细介绍和用法可以参考：<a target="_blank" rel="noopener" href="https://tools.kali.org/wireless-attacks/kismet">Kismet Package Description</a></p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/kismet.png" alt="kismet"></p>
+<h2 id="接入阶段"><a href="#接入阶段" class="headerlink" title="接入阶段"></a>接入阶段</h2><p>当扫描完成，用户选择某一个AP进行接入，或无线客户端自动连接某AP时，进入接入阶段。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200619150312552.png" alt="image-20200619150312552"></p>
+<p>接入阶段分为两个部分，参数协商和密码验证。Association Request 和 Association Response帧负责协商接入AP的STA是否满足要求（如支持的频段、速率、信道等）；Authentication帧负责协商认证算法（开放式、PSK、SAE等）和一些辅助数据（如Challenge Text等, WEP加密会在这个阶段传输认证数据）。</p>
+<p>802.11支持的加密方式很多，如下图为OpenWRT系统中提供的加密方式：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200619151741540.png" alt="image-20200619151741540"></p>
+<h3 id="WEP认证"><a href="#WEP认证" class="headerlink" title="WEP认证"></a>WEP认证</h3><p>WEP认证有两种方式，“WEP 开放式系统” 和 “WEP 共享密钥”两种方式。</p>
+<p>“WEP 开放式系统” 指的是，任意客户端（STA）都可以连入热点（AP），但是在信道上传输的数据依然使用WEP提供的加密方式加密；而 “WEP 共享密钥” 则需要在接入之前先验证密钥，当验证通过之后才允许STA接入。</p>
+<p><strong>“WEP 共享密钥”</strong> 的认证过程如下图所示：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200619164809124.png"></p>
+<p>其简单的流程为，AP端在认证过程中向STA发送一个<code>Challenge Text</code>，由STA加密后将密文传送给AP，AP端校验收到的密文与自己计算的密文如果相等则允许站点接入，否则将拒绝。使用Wireshark抓包的流程如下：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200619164643763.png"></p>
+<p>认证通过后，后续的数据包的内容都以WEP的密钥流进行加密，STA需要以相同的密钥流解密，才能正常的收发数据。</p>
+<p>**“WEP 开放式系统” ** 则跳过了这一认证阶段，允许任何STA加入网络，但后续通信中的数据包是加密的。因此即使STA连入AP，但没有正确的密码也无法正常通信。可以通过简单的实验来验证：</p>
+<ol>
+<li>将路由器的加密配置为 “WEP 开放系统”， 并配置密码；</li>
+<li>用手机或电脑（STA）尝试连入该AP，密码输入任意字符（但别输正确的密码）；</li>
+<li>此时发现STA显示已连接，但是会卡在“获取IP地址”的部分（如果路由器开启了DHCP）；</li>
+<li>即使手动配置IP后，依然无法进行通信。</li>
+</ol>
+<p>以上的实验中，无法获取到IP地址或配置IP后无法通信，是因为密码错误，STA无法解密数据包，因此无法通信。</p>
+<h3 id="WEP密码破解"><a href="#WEP密码破解" class="headerlink" title="WEP密码破解"></a>WEP密码破解</h3><p>WEP密码破解的应用实际上工具很多，如Besside-ng，AirCrack-ng等，以及很多集成该功能的无线安全审计套件，其教程也很容易搜索到。这里简单介绍一下其破解原理。</p>
+<p>WEP是一个已经被完全破解的加密算法，其原理涉及到密码学和数学的很多知识，这里不展开详细叙述，感兴趣的可以去看看《<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/57677761">密码分析学——深度分析WEP密钥恢复攻击（PTW攻击）</a>》，其中对WEP破解的每一步原理都有详细的分析，本人觉得是写得非常好的一篇文章。</p>
+<p>RC4 流密码算法是将输入种子密钥进行某种置换和组合运算来生成WEP密钥流的，发送的数据与该密钥流异或，则得到最终的密文。而加密数据（负载）的第一个字节是802.2逻辑链路层的头部数据，而每个数据帧的该字节都是一样的，因此可以得到密文的第一个字节、对应的明文字节。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200622102900122.png" alt="image-20200622102900122"></p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200622103037907.png" alt="image-20200622103037907"></p>
+<blockquote>
+<p>注：使用Wireshark解密可参考官方文档《<a target="_blank" rel="noopener" href="https://wiki.wireshark.org/HowToDecrypt802.11">How to Decrypt 802.11</a>》</p>
+</blockquote>
+<p>同时，IV信息是包含在头部信息中一起传输的，因此已知 初始向量IV、第一字节密钥流、第一字节明文，针对RC4算法是可以计算并确定WEP密钥。</p>
+<h3 id="WPA四次握手"><a href="#WPA四次握手" class="headerlink" title="WPA四次握手"></a>WPA四次握手</h3><p>WPA的认证过程与WEP略有区别。大致的连接、认证过程如下图：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200622103724702.png" alt="image-20200622103724702"></p>
+<p>在Authentication阶段，WPA并不进行实际认证，而是传输<code>Open System</code>来直接允许STA连入：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200622103548051.png" alt="image-20200622103548051"></p>
+<p>而实际的密钥认证在“四次握手”阶段。</p>
+<p>“WPA 四次握手” 是验证密钥，并且生成对数据包的加密密钥的过程。流程如下：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/686769-20161117152254170-216963418.png" alt="img"></p>
+<p>连接过程中，用户输入的 ”WPA密码“ 在认证过程中称为<code>PSK(Pre-Shared Key)</code>，即 ”预共享密钥“。利用<code>PSK</code>以及无线网络的<code>ssid</code>，使用 ”PBKDF2“ 算法可以计算出<code>PMK</code>。利用<code>PMK</code>，以及认证过程中传输的<code>ANonce</code>、<code>SNonce</code>、<code>STA的MAC地址</code>、<code>AP的MAC地址</code>，使用hmac sha1算法可以计算出<code>PTK</code>。最后使用<code>PTK</code>的前16个字节以及整个<code>802.1X Authentication</code>数据包，计算出<code>MIC</code>。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200622112834875.png" alt="image-20200622112834875"></p>
+<h3 id="WPA-PSK密码破解"><a href="#WPA-PSK密码破解" class="headerlink" title="WPA-PSK密码破解"></a>WPA-PSK密码破解</h3><p>从上面的流程中可以看出，密钥的认证使用摘要算法，因此破解方式只能是暴力破解。但是计算步骤中，除了Wi-Fi密码（PSK）外，所有参数都可以从交互的数据包中获取，因此可以捕获STA的接入包进行离线破解。最终通过计算出的MIC与捕获包中的MIC比对，得出最终结果。</p>
+<p>在整个暴力破解过程中，PMK的计算是最耗时的，同时因为PMK与<code>SSID</code>直接相关，因此生成字典较难复用；同时需要有足够大的密码字典才能提高命中率，而巨大的密码字典的生成与保存也是一个问题。</p>
+<h3 id="WPS认证与破解"><a href="#WPS认证与破解" class="headerlink" title="WPS认证与破解"></a>WPS认证与破解</h3><p>WPS 是 Wi-Fi Protected Setup（Wi-Fi保护设置）的缩写，为了简化STA与AP的连接过程。在使用WPS接入网络的过程中，用户仅需要输入8位数字组成的PIN码，即可接入网络。在这一过程中，STA与AP之间通过<code>EAP Request</code>和<code>EAP Response</code>帧来验证用户输入的PIN码，并传输后续的信息（如SSID、密码等）。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200623093408305.png" alt="image-20200623093408305"></p>
+<p>图片来自：<a target="_blank" rel="noopener" href="https://netsecurity.51cto.com/art/201504/471508_all.htm">https://netsecurity.51cto.com/art/201504/471508_all.htm</a></p>
+<p>由于PIN码为8位纯数字，因此理论上有10 ^ 8 中不同的组合；而一般情况下，每次验证PIN码需要3~10秒左右的时间（与信号强度、干扰等有关），因此在理论上来看，即使以 3sec/PIN 的速度破解， 10 ^ 8 个PIN码遍历完需要 （10 ^ 8 * 3) / 3600 / 24 = 3472.2天，因此在理论上来说这种方式应对暴力破解是完全没有问题的。</p>
+<p>但是，在协议设计的时候，第8位 PIN 为校验位，因此实际需要暴力破解的位数变成7位。此外，在验证 PIN 码失败后，AP会返回<code>EAP-NACK</code>的响应包，通过响应包的内容，可以分别判断前4位和后3位是否正确（由于手边没有支持WPS的路由器，因此此部分无法抓包验证）。</p>
+<p>基于这样的特性，WPS的暴力破解变成了分别猜解前4位和后3位，即 (10 ^ 4 + 10 ^ 3) 种可能性，依然按照 3sec/PIN 的速度推算，完整跑完全部PIN需要约 9.16小时，而根据在网上搜索破解WPS的结果来看，即使信号不好（如破解隔壁邻居的AP），时间也不超过12小时即可跑出结果。</p>
+<h3 id="相关工具-1"><a href="#相关工具-1" class="headerlink" title="相关工具"></a>相关工具</h3><p><strong><a target="_blank" rel="noopener" href="https://tools.kali.org/wireless-attacks/cowpatty">coWPAtty</a></strong> 是一个WPA/WPA2离线破解工具，可以生成PMK字典并且计算MIC来进行密码破解。其生成字典的命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># genpmk -f /usr/share/wordlists/nmap.lst -d cowpatty_dict -s securenet</span></span><br><span class="line">genpmk 1.3 - WPA-PSK precomputation attack. \&amp;lt;jwright@hasborg.com\&amp;gt;</span><br><span class="line">File cowpatty_dict does not exist, creating.</span><br><span class="line">key no. 1000: pinkgirl</span><br><span class="line">1641 passphrases tested <span class="keyword">in</span> 3.60 seconds: 456.00 passphrases/second</span><br></pre></td></tr></table></figure>
+
+<p><strong><a target="_blank" rel="noopener" href="https://tools.kali.org/wireless-attacks/wifite">Wifite</a></strong> 是一个综合性的无线安全审计工具，集成了WPA/WPA2、WEP等破解工具。用法简单便捷。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># wifite -h</span></span><br><span class="line"></span><br><span class="line">  .;<span class="string">&#x27;                     `;,</span></span><br><span class="line"><span class="string"> .;&#x27;</span>  ,;<span class="string">&#x27;             `;,  `;,   WiFite v2 (r85)</span></span><br><span class="line"><span class="string">.;&#x27;</span>  ,;<span class="string">&#x27;  ,;&#x27;</span>     `;,  `;,  `;,</span><br><span class="line">::   ::   :   ( )   :   ::   ::  automated wireless auditor</span><br><span class="line"><span class="string">&#x27;:.  &#x27;</span>:.  <span class="string">&#x27;:. /_\ ,:&#x27;</span>  ,:<span class="string">&#x27;  ,:&#x27;</span></span><br><span class="line"> <span class="string">&#x27;:.  &#x27;</span>:.    /___\    ,:<span class="string">&#x27;  ,:&#x27;</span>   designed <span class="keyword">for</span> Linux</span><br><span class="line">  <span class="string">&#x27;:.       /_____\      ,:&#x27;</span></span><br><span class="line">           /       \</span><br><span class="line"></span><br><span class="line">   COMMANDS</span><br><span class="line">    -check &lt;file&gt;   check capfile &lt;file&gt; <span class="keyword">for</span> handshakes.</span><br><span class="line">    -cracked        display previously-cracked access points</span><br><span class="line"></span><br><span class="line">   GLOBAL</span><br><span class="line">    -all            attack all targets.              [off]</span><br><span class="line">    -i &lt;iface&gt;      wireless interface <span class="keyword">for</span> capturing [auto]</span><br><span class="line">    -mac            anonymize mac address            [off]</span><br><span class="line">    -c &lt;channel&gt;    channel to scan <span class="keyword">for</span> targets      [auto]</span><br><span class="line">    -e &lt;essid&gt;      target a specific access point by ssid (name)  [ask]</span><br><span class="line">    -b &lt;bssid&gt;      target a specific access point by bssid (mac)  [auto]</span><br><span class="line">    -showb          display target BSSIDs after scan               [off]</span><br><span class="line">    -pow &lt;db&gt;       attacks any targets with signal strenghth &gt; db [0]</span><br><span class="line">    -quiet          <span class="keyword">do</span> not <span class="built_in">print</span> list of APs during scan           [off]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">   WPA</span><br><span class="line">    -wpa            only target WPA networks (works with -wps -wep)   [off]</span><br><span class="line">    -wpat &lt;sec&gt;     time to <span class="built_in">wait</span> <span class="keyword">for</span> WPA attack to complete (seconds) [500]</span><br><span class="line">    -wpadt &lt;sec&gt;    time to <span class="built_in">wait</span> between sending deauth packets (sec) [10]</span><br><span class="line">    -strip          strip handshake using tshark or pyrit             [off]</span><br><span class="line">    -crack &lt;dic&gt;    crack WPA handshakes using &lt;dic&gt; wordlist file    [off]</span><br><span class="line">    -dict &lt;file&gt;    specify dictionary to use when cracking WPA [phpbb.txt]</span><br><span class="line">    -aircrack       verify handshake using aircrack [on]</span><br><span class="line">    -pyrit          verify handshake using pyrit    [off]</span><br><span class="line">    -tshark         verify handshake using tshark   [on]</span><br><span class="line">    -cowpatty       verify handshake using cowpatty [off]</span><br><span class="line"></span><br><span class="line">   WEP</span><br><span class="line">    -wep            only target WEP networks [off]</span><br><span class="line">    -pps &lt;num&gt;      <span class="built_in">set</span> the number of packets per second to inject [600]</span><br><span class="line">    -wept &lt;sec&gt;     sec to <span class="built_in">wait</span> <span class="keyword">for</span> each attack, 0 implies endless [600]</span><br><span class="line">    -chopchop       use chopchop attack      [on]</span><br><span class="line">    -arpreplay      use arpreplay attack     [on]</span><br><span class="line">    -fragment       use fragmentation attack [on]</span><br><span class="line">    -caffelatte     use caffe-latte attack   [on]</span><br><span class="line">    -p0841          use -p0841 attack        [on]</span><br><span class="line">    -hirte          use hirte (cfrag) attack [on]</span><br><span class="line">    -nofakeauth     stop attack <span class="keyword">if</span> fake authentication fails    [off]</span><br><span class="line">    -wepca &lt;n&gt;      start cracking when number of ivs surpass n [10000]</span><br><span class="line">    -wepsave        save a copy of .<span class="built_in">cap</span> files to this directory [off]</span><br><span class="line"></span><br><span class="line">   WPS</span><br><span class="line">    -wps        only target WPS networks         [off]</span><br><span class="line">    -wpst &lt;sec&gt;     max <span class="built_in">wait</span> <span class="keyword">for</span> new retry before giving up (0: never)  [660]</span><br><span class="line">    -wpsratio &lt;per&gt; min ratio of successful PIN attempts/total tries    [0]</span><br><span class="line">    -wpsretry &lt;num&gt; max number of retries <span class="keyword">for</span> same PIN before giving up [0]</span><br><span class="line"></span><br><span class="line">   EXAMPLE</span><br><span class="line">    ./wifite.py -wps -wep -c 6 -pps 600</span><br><span class="line"></span><br><span class="line"> [+] quitting</span><br></pre></td></tr></table></figure>
+
+<p>**<a target="_blank" rel="noopener" href="https://tools.kali.org/wireless-attacks/pyrit">Pyrit</a>**支持离线破解，可指定含有WPA四次握手的捕获数据包进行破解。该工具还可以生成PMK字典文件，加速破解进度。具体用法可参见工具<a target="_blank" rel="noopener" href="https://github.com/JPaulMora/Pyrit/wiki/Usage">官方Github</a></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># pyrit -i /usr/share/wordlists/metasploit/password.lst import_passwords</span></span><br><span class="line">Pyrit 0.5.1 (C) 2008-2011 Lukas Lueg - 2015 John Mora</span><br><span class="line">https://github.com/JPaulMora/Pyrit</span><br><span class="line">This code is distributed under the GNU General Public License v3+</span><br><span class="line"></span><br><span class="line">Connecting to storage at <span class="string">&#x27;file://&#x27;</span>...  connected.</span><br><span class="line">88396 lines <span class="built_in">read</span>. Flushing buffers....</span><br><span class="line">All <span class="keyword">done</span>.</span><br></pre></td></tr></table></figure>
+
+<p>**<a target="_blank" rel="noopener" href="https://tools.kali.org/wireless-attacks/reaver">Reaver</a>**是一款破解WPS PIN码并获取目标AP接入密码的工具。其官方宣称：理论破解时间在2~10小时，实际破解时间为理论时间的一半。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">root@kali:~<span class="comment"># reaver -i wlan0mon -b E0:3F:49:6A:57:78 -v</span></span><br><span class="line"></span><br><span class="line">Reaver v1.6.5 WiFi Protected Setup Attack Tool</span><br><span class="line">Copyright (c) 2011, Tactical Network Solutions, Craig Heffner &lt;cheffner@tacnetsol.com&gt;</span><br><span class="line"></span><br><span class="line">[+] Waiting <span class="keyword">for</span> beacon from E0:3F:49:6A:57:78</span><br><span class="line">[+] Associated with E0:3F:49:6A:57:78 (ESSID: ASUS)</span><br><span class="line">[+] Trying pin 12345670</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="断开阶段"><a href="#断开阶段" class="headerlink" title="断开阶段"></a>断开阶段</h2><p>断开阶段有两种数据帧：<code>Deauthenticaion（解除认证）</code>和<code>Deassociation（解除关联）</code>。</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200622143155410.png" alt="image-20200622143155410"></p>
+<p>一般情况下，我们在日常使用的时候很少会经历这个阶段，或者说对用户是无感的。当用户切换Wi-Fi连接时，在Wireshark中捕获到相关的数据帧如下：</p>
+<p><img src="/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/image-20200622142620358.png" alt="image-20200622142620358"></p>
+<p>一般的，在802.11关联过程（Association process, 即本文提及的接入阶段）中，会经历4种状态：</p>
+<ol>
+<li>未认证、未关联</li>
+<li>已认证但未关联</li>
+<li>已认证、已关联</li>
+<li>已认证、已关联且已通过802.1x认证</li>
+</ol>
+<p>起初STA处于<strong>状态1</strong>，AP端会与STA协商采用怎样的认证（该部分可以参见 “WEP认证” 章节），如“开放系统”等。当协商完成并进行认证后，进入<strong>状态2</strong>。此时双方关联(Association Request / Response)，进入<strong>状态3</strong>。</p>
+<p>此时，如果加密方式需要802.1x认证（如WPA-PSK），则开始这一步骤，完成后进入<strong>状态4</strong>。在状态4中，如果双方收到<code>Deassociation</code>帧，则<strong>退回到状态2</strong>；如果收到<code>Deauthenticaion</code>帧则<strong>退回状态1</strong>。</p>
+<p>由于802.11管理帧是没有校验机制的，因此攻击者可以任意伪造这两类帧，达到断开用户连接的目的。连续大量发送这两类帧可以造成拒绝服务；而更多情况下攻击者会利用这一机制短暂的让客户端掉线，以收集认证过程中的数据包（WEP的认证或WPA的四次握手），以便用来破解Wi-Fi密码。</p>
+<h3 id="相关工具-2"><a href="#相关工具-2" class="headerlink" title="相关工具"></a>相关工具</h3><p>这部分在Kali中没有独立的工具，都包含在其他的工具集中，如<a target="_blank" rel="noopener" href="https://tools.kali.org/wireless-attacks/mdk3">mdk3</a>。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>Wi-Fi安全已经不是一个新鲜的话题，甚至已经是一个烂大街的话题了。本文尝试系统的梳理Wi-Fi安全的可能攻击点，以及部分攻击的原理，希望能够在Wi-Fi安全方面有个全局的观念，而不是停留在针对某个点的利用，比如破解你邻居的Wi-Fi密码。</p>
+<p>在实际的应用中，这些攻击点可以被组合利用进行各种各样的攻击，而WiFi Pineapple等项目则是很好的集成了这些工具。如果后期有时间，我会尝试结合攻击点来分析这些测试工具。</p>
+<p>参考文献</p>
+<p>[1] 维基百科编者. Wi-Fi[G/OL]. 维基百科, 2020(20200522)[2020-05-22]. <a target="_blank" rel="noopener" href="https://zh.wikipedia.org/w/index.php?title=Wi-Fi&amp;oldid=59764163">https://zh.wikipedia.org/w/index.php?title=Wi-Fi&amp;oldid=59764163</a>.</p>
+<p>[2] 维基百科编者. IEEE 802.11[G/OL]. 维基百科, 2020(20200427)[2020-04-27]. <a target="_blank" rel="noopener" href="https://zh.wikipedia.org/w/index.php?title=IEEE_802.11&amp;oldid=59378008">https://zh.wikipedia.org/w/index.php?title=IEEE_802.11&amp;oldid=59378008</a>.</p>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#802-11%E5%8D%8F%E8%AE%AE"><span class="toc-text">802.11协议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#802-11%E6%97%A0%E7%BA%BF%E5%B8%A7"><span class="toc-text">802.11无线帧</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%AB%E6%8F%8F%E9%98%B6%E6%AE%B5"><span class="toc-text">扫描阶段</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E5%8A%A8%E6%89%AB%E6%8F%8F"><span class="toc-text">主动扫描</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A2%AB%E5%8A%A8%E6%89%AB%E6%8F%8F"><span class="toc-text">被动扫描</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E5%B7%A5%E5%85%B7"><span class="toc-text">相关工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A5%E5%85%A5%E9%98%B6%E6%AE%B5"><span class="toc-text">接入阶段</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#WEP%E8%AE%A4%E8%AF%81"><span class="toc-text">WEP认证</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WEP%E5%AF%86%E7%A0%81%E7%A0%B4%E8%A7%A3"><span class="toc-text">WEP密码破解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B"><span class="toc-text">WPA四次握手</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WPA-PSK%E5%AF%86%E7%A0%81%E7%A0%B4%E8%A7%A3"><span class="toc-text">WPA-PSK密码破解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WPS%E8%AE%A4%E8%AF%81%E4%B8%8E%E7%A0%B4%E8%A7%A3"><span class="toc-text">WPS认证与破解</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E5%B7%A5%E5%85%B7-1"><span class="toc-text">相关工具</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%AD%E5%BC%80%E9%98%B6%E6%AE%B5"><span class="toc-text">断开阶段</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E5%B7%A5%E5%85%B7-2"><span class="toc-text">相关工具</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/" rel="next" title="利用Python搭建长连接中间人工具分析流量">
+          利用Python搭建长连接中间人工具分析流量
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+          <a href="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/" rel="prev" title="WPA四次握手过程解析">
+            WPA四次握手过程解析
+          </a>
+          <span>〉</span>
+        
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>
