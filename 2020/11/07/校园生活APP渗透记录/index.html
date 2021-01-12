@@ -96,7 +96,7 @@
       <span id="busuanzi_value_page_pv"></span> 点击
     </span>
       <span class="slash">/</span>
-      <span class="read">阅读耗时 12 分钟</span>
+      <span class="read">阅读耗时 13 分钟</span>
     </header>
 
     <div class="post-content">
@@ -113,6 +113,7 @@
 <h2 id="逆向APK"><a href="#逆向APK" class="headerlink" title="逆向APK"></a>逆向APK</h2><p>既然是APK的安装包，那么逆一下去看看加密算法也很合理吧。</p>
 <p>在分析之前先看看请求有啥特点，当点击比如”我的账单“的选项的时候，发出去的请求虽然是加密的，但是内容并没有变化，那就可能是对称加密，大概率是ECB模式，没有加盐，没有iv的变化，所以才能明文不变的时候密文也不变。</p>
 <p>为了图省事，直接用dex2jar把class文件转成jar，然后用jd_gui来查看。</p>
+<p>原本想着是不是会有加壳、混淆啥的，对反编译并不抱很大的希望，结果拖进去一看，完全没有任何处理，整个程序的结构非常清晰，简直可以作为安卓逆向的新手入门范例了！那正好，也省的去折腾frida之类的方法了。</p>
 <p>首先找到与程序包名对应的包，如这里的<code>com.xxx.xxxlife</code>，发现一堆的Activity，一般来说登录和密码找回这两个部分的界面内容是最简单的，这里找到了login的Activity：</p>
 <p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162214893.png" alt="image-20201107162214893"></p>
 <p>找这个Activity的目的是看看有没有发送请求的部分，毕竟它在发送之前是要先加密之后再发出去的嘛。</p>
