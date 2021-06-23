@@ -8,6 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#202020"/>
   <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="google-site-verification" content="-D9Uisj3xTi8Bv3Psr7gf3qKRfGei6v4_hyvxwWprC0" />
   <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
   
   
@@ -212,6 +213,30 @@
         var toc = document.getElementById('toc');
         if (toc) {
           menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>
+unction() {
             if (toc) {
               if (toc.style.display == 'block') {
                 toc.style.display = 'none';
