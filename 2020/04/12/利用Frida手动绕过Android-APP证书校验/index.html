@@ -196,6 +196,23 @@
     <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
     <span>进行许可。 转载时请注明原文链接。</span>
 </div>
+
+  <div id="gitalk-container"></div>
+  <link rel="stylesheet" href="https://unpkg.com/gitalk@latest/dist/gitalk.css">
+<script src="https://unpkg.com/gitalk@latest/dist/gitalk.min.js"></script>
+<script src="https://priesttomb.github.io/js/md5.min.js"></script>
+<script type="text/javascript">
+    new Gitalk({
+        cientID: 'b1ea9aed8ae674a0fde6',
+        clientSecret: '71732aecef18eed31b024304a88ce7bc77a28f6f',
+        owner: 'mactavishmeng',
+        admin: 'mactavishmeng',
+        repo: 'mactavishmeng.github.io',
+        id: md5(location.pathname),
+        distractionFreeMode: true
+    }).render('gitalk-container')
+</script>
+
 <div class="share" style="width: 100%;">
   
 </div>
