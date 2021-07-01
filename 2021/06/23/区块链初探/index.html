@@ -12,15 +12,15 @@
   <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
   
   
-    <meta name="keywords" content="" />
+    <meta name="keywords" content="区块链," />
   
 
   
-    <meta name="description" content="区块链初探" />
+    <meta name="description" content="区块链安全初探：比特币概述" />
   
   
   <link rel="icon" type="image/x-icon" href="/logo.png">
-  <title>区块链初探 [ RunningHacker ]</title>
+  <title>区块链安全初探：比特币概述 [ RunningHacker ]</title>
   
     <!-- stylesheets list from config.yml -->
     
@@ -77,7 +77,7 @@
   <article class="post" id="post">
     <header class="post-header text-center">
       <h1 class="title">
-        区块链初探
+        区块链安全初探：比特币概述
       </h1>
       <span>
         
@@ -89,7 +89,7 @@
       <span class="slash">/</span>
       <span class="post-meta">
       <span class="post-tags">
-        
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%8C%BA%E5%9D%97%E9%93%BE/" rel="tag">区块链</a></li></ul>
       </span>
     </span>
       <span class="slash">/</span>
@@ -97,17 +97,102 @@
       <span id="busuanzi_value_page_pv"></span> 点击
     </span>
       <span class="slash">/</span>
-      <span class="read">阅读耗时 1 分钟</span>
+      <span class="read">阅读耗时 21 分钟</span>
     </header>
 
     <div class="post-content">
-      
+      <p>最近做了一些区块链安全的相关研究，发现虽然这个概念非常火，但是真正想了解却不容易。区块链技术从最初的 比特币（Bitcoin）发展至今，各种用途、各种概念的加入，使得它变成了一个高度灵活的体系。也正是因为技术的蓬勃发展，使得区块链在除了电子货币的领域也得到了应用。</p>
+<span id="more"></span>
+
+<p>区块链这个世界的起源，从中本聪的那篇论文《 Bitcoin: A peer-to-peer electronic cash system》[1]开始。他提出了一种不依赖第三方的、在P2P网络上运行的现金交易系统，可以完成转账并防止双重支付(Double-spanding，也称为双花)。因此，区块链技术的本源是一个<strong>分布式账本</strong>。</p>
+<h1 id="区块链、比特币，到底是什么关系？"><a href="#区块链、比特币，到底是什么关系？" class="headerlink" title="区块链、比特币，到底是什么关系？"></a>区块链、比特币，到底是什么关系？</h1><p>在谈论具体技术之前，需要先搞清楚基本概念：比特币是什么，而区块链又是什么？如果不说明这两者的关系，后文中的很多概念都会混淆。</p>
+<h2 id="比特币"><a href="#比特币" class="headerlink" title="比特币"></a>比特币</h2><p>在2008年，中本聪第一次提出了 ”点对点电子货币系统“ 的概念，并命名为 ”比特币（Bitcoin）“。在他的论文[1]中，阐述了他构建这个系统的基础：区块（Block）用于记录一定的交易，每个区块之间通过哈希值连接起来（有点像链表的结构，当前区块记录上一个区块的哈希值），这样就形成了链（Chain）的关系。</p>
+<p>实际上，在中本聪的论文中，全篇都没有提及区块链（Blockchain）这个词汇，只是分别说了区块（Block）和链（Chain）的概念。</p>
+<h2 id="区块链"><a href="#区块链" class="headerlink" title="区块链"></a>区块链</h2><p>比特币概念的提出似乎更倾向于一个概念，因为在2009年中本聪本人挖出第一笔奖励的时候，也无法预估使用人数、未来的使用场景。在对一个区块的大小进行定义的时候，由于当时使用人数很少，且设置较大可能会更容易引发垃圾交易（SPAM Tx）[2]，中本聪给出了1MB大小这一数字。而一笔交易所占用的大小约为200-300Bytes，有些交易可能会更大。因此，比特币的交易性能较差（约每秒7笔）。</p>
+<p>由于区块链是公有链，因此区块信息很容易查询和验证。比如可以访问<a target="_blank" rel="noopener" href="https://www.blockchain.com/explorer/">Bitcoin Explorer</a>来查看比特币链的信息：</p>
+<p><img src="/2021/06/23/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%88%9D%E6%8E%A2/image-20210701103645755.png" alt="image-20210701103645755"></p>
+<p style="text-align:center">图1. Blockchain.com 区块查询页面</p>
+
+
+
+<p>可以看到这个区块包含的交易数是4246个，大小1424327B，平均一个交易的大小是约335B。</p>
+<p>显然，这个交易速度实在太缓慢，此外比特币链的功能也较为单一，只能记录交易信息。因此，在比特币火了之后，各种各样的”魔改“版本出现，解决了各自的需求。比如有些提高了交易的效率，有些支持智能合约，能运行复杂逻辑（<a target="_blank" rel="noopener" href="https://baike.baidu.com/item/%E4%BB%A5%E5%A4%AA%E5%B8%81">以太坊</a>等），有些针对业务场景进行了优化（<a target="_blank" rel="noopener" href="https://baike.baidu.com/item/%E7%91%9E%E6%B3%A2%E5%B8%81/4956309">瑞波币</a>）。</p>
+<p>这些不同的”分布式数字货币系统“的原理类似，只是在一些具体技术上进行了一些改进和妥协，不能被称之为”比特币“。因此，根据这类技术的共同特点，称之为”区块链“技术。</p>
+<h1 id="Bitcoin是如何运行的"><a href="#Bitcoin是如何运行的" class="headerlink" title="Bitcoin是如何运行的"></a>Bitcoin是如何运行的</h1><p>[3]中指出，区块链就是一个安全的分布式数据库，保存交易记录。“A blockchain functionally serves as a distributed and secure database of transaction logs”。在这样一个系统中，需要解决以下问题：</p>
+<ol>
+<li>在一个分布式网络中，没有中心节点给出“权威”数据，怎么保证大家记账的内容都一样呢？</li>
+<li>在分布式环境中，如何证明 <em>“A向B转账1BTC“</em> 这条交易记录确实是A发出的，而不是其他人伪造的呢？</li>
+<li>怎么保证A不会将一笔钱同时转给两个收款方？（比如A账户余额只有1个BTC，他向一部分人宣布给B转账1BTC的同时，和另一些人说这1BTC是转给C的）</li>
+</ol>
+<p>因此，Bitcoin中设计了一些机制，来解决上述问题，但是方案在实现的时候可能就无法按照想象那么美好，实际运行中Bitcoin以及其他区块链还是出过很多安全事故。下面以Bitcoin为例，简要说说区块链技术，在理论层面如何保障分布式环境交易安全的。</p>
+<h2 id="问题的答案"><a href="#问题的答案" class="headerlink" title="问题的答案"></a>问题的答案</h2><p>上面列出的三个问题，是我个人认为在Bitcoin中比较重要的理论基础，也是我认为中本聪这套机制特别巧妙的地方。当然，在他的原论文中讨论的问题也不止这三个，但这里先回答这三个问题，其他方面的机制后面再慢慢覆盖，先对Bitcoin有个直观的认识。</p>
+<ol>
+<li><p>在一个分布式网络中，没有中心节点给出“权威”数据，怎么保证大家记账的内容都一样呢？</p>
+<p>（通过Bitcoin的 <strong>共识机制</strong> 和 <strong>网络通信准则</strong>）</p>
+</li>
+<li><p>在分布式环境中，如何证明 <em>“A向B转账1BTC“</em> 这条交易记录确实是A发出的，而不是其他人伪造的呢？</p>
+<p>（交易记录中的 <strong>公钥</strong> 和 <strong>签名</strong> 机制）</p>
+</li>
+<li><p>怎么保证A不会将一笔钱同时转给两个收款方？（比如A账户余额只有1个BTC，他向一部分人宣布给B转账1BTC的同时，和另一些人说这1BTC是转给C的）</p>
+<p>（需要全部的参与方共同验证，即大部分的节点是诚实的、少数服从多数）</p>
+</li>
+</ol>
+<p>下面逐一进行说明。</p>
+<h3 id="如何达成共识"><a href="#如何达成共识" class="headerlink" title="如何达成共识"></a>如何达成共识</h3><p>共识机制是区块链中的一个非常重要的技术，任何声称自己是”区块链“的技术都绕不开共识。Bitcoin采用了 Proof-of-Work 的方式来进行共识。</p>
+<p>Proof-of-Work（PoW），即工作量证明，是通过增加成本来限制攻击者攻击的方法。Bitcoin是一个开放的系统，任意节点都可以通过部署客户端加入到这个系统中。参与PoW的节点称为”矿工“节点，这与现实中付出劳动”挖矿“并获取工资的行为非常类似。</p>
+<p>Bitcoin的区块简单来说就是包含一系列交易的一个数据段。其中，除了交易信息<code>Tx</code>，还有上一个区块的哈希值<code>Prev Hash</code>，以及一个可变字段<code>Nonce</code>。</p>
+<p><img src="/2021/06/23/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%88%9D%E6%8E%A2/image-20210701110728530.png" alt="image-20210701110728530"></p>
+<p style="text-align:center">图2. 区块示意图[1]</p>
+
+
+
+<p>矿工们需要做的就是，根据系统给定的”难度“（即计算出的目标哈希前面有多少0，具体形态可以参见图1），尝试改变<code>Nonce</code>字段的内容，使得计算的结果满足难度要求。</p>
+<p>一旦发现满足要求的随机数，发现这个数字的矿工就向全网广播这个区块，其他矿工验证通过后，就将这个块记录下来，作为得到认可的交易数据。然后将这个区块的哈希值放到下一个块中，继续计算。</p>
+<p>“<a target="_blank" rel="noopener" href="https://www.liaoxuefeng.com/wiki/1207298049439968/1311929771491361">挖矿原理</a>”一文中有更简洁的解释。</p>
+<h4 id="为什么矿工要按规则挖矿？"><a href="#为什么矿工要按规则挖矿？" class="headerlink" title="为什么矿工要按规则挖矿？"></a>为什么矿工要按规则挖矿？</h4><p>一个矿工节点，在找到正确的<code>Nonce</code>之后是有比特币奖励的。</p>
+<p>这个奖励会写在当前的区块中。如果矿工不按照规则去进行，那么他计算出的区块不被其他人认可，自然也无法得到这笔奖励。因此矿工必须遵守规则，按照上述规则生成区块，得到其他节点的认可，从而获取奖励。</p>
+<h4 id="PoW是如何保证共识的？"><a href="#PoW是如何保证共识的？" class="headerlink" title="PoW是如何保证共识的？"></a>PoW是如何保证共识的？</h4><p>由于寻找符合要求的<code>Nonce</code>非常复杂，但验证很简单，且区块中的交易被改动的话，整个区块的哈希会变化，因此一旦找到了<code>Nonce</code>就能防止区块被篡改。</p>
+<p>同时，挖矿是有收益的，这个收益的来源是基于遵守规则的情况下。遵守规则，就有可能在挖矿中获取比特币奖励的正向激励；不遵守规则，虽然没有惩罚措施，但是发出的区块不会被其他节点记录，对整个系统几乎没有什么影响。</p>
+<h4 id="这种方式真的安全吗？"><a href="#这种方式真的安全吗？" class="headerlink" title="这种方式真的安全吗？"></a>这种方式真的安全吗？</h4><p>Bitcoin使用的PoW共识需要大部分节点的诚实。作为一个分布式、没有可信第三方的场景，只能通过少数服从多数的原则来保障多数人的利益。</p>
+<p>随着Bitcoin规模的不断增加，应该会越来越安全。由于寻找<code>Nonce</code>是一个概率问题，因此掌握算力的比例占全网总算力的比例越高，算出下一个区块的概率越大。但只要不是区块的产出一直控制在一个矿工手里，那相对来说就是安全的。</p>
+<p>具体的内容会在共识机制的部分详细的讨论。</p>
+<h3 id="如何证明转账信息不是伪造的？"><a href="#如何证明转账信息不是伪造的？" class="headerlink" title="如何证明转账信息不是伪造的？"></a>如何证明转账信息不是伪造的？</h3><p>这里使用了公钥和签名来完成。</p>
+<p><img src="/2021/06/23/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%88%9D%E6%8E%A2/image-20210701150952873.png" alt="image-20210701150952873"></p>
+<p style="text-align:center">图3. 交易（Transaction）示意图[1]</p>
+
+
+
+<p>通过在交易里包含转账人的公钥，以及对交易信息+公钥进行签名，即可保证这条信息是由转账者本人发起的。</p>
+<p>当然，前提条件是，私钥是保存完善的。一旦私钥泄露，那么你的账户余额就不保咯。</p>
+<h3 id="如何防止双花（Double-Spending）？"><a href="#如何防止双花（Double-Spending）？" class="headerlink" title="如何防止双花（Double Spending）？"></a>如何防止双花（Double Spending）？</h3><p>首先，在Bitcoin体系中，是没有传统的账户概念。因为区块链不断延长，不可能每次转账要检查账户余额的时候，都从链头检索一遍。</p>
+<p>首先，区块链引入“未花费交易输出（UTXO）”的概念，可以追溯某一笔交易的“前世今生”。“<a target="_blank" rel="noopener" href="https://www.liaoxuefeng.com/wiki/1207298049439968/1207298275932480">UTXO模型</a>”一文有比较清晰的阐述。</p>
+<p>其次，在确定转账余额充足后，矿工节点会检查待生成区块中的全部交易，是否有问题。就包括同一笔金额是否被转给两个收款方。如果遇到问题，矿工节点一般会删除这个交易，以保证一笔钱只转给一个收款方。</p>
+<h4 id="如果有人作恶"><a href="#如果有人作恶" class="headerlink" title="如果有人作恶"></a>如果有人作恶</h4><p>有两种情况：</p>
+<ol>
+<li>矿工节点作恶：在生成区块时，不按照规定删除冲突的交易，而是正常生成</li>
+<li>交易者作恶：交易者有选择的给不同的矿工节点发送交易，尝试让他们同时生成两个各自含有冲突交易的区块</li>
+</ol>
+<p>对于情况1：</p>
+<p>​    其他矿工节点接收到挖出的新区块时，会检查其内容。如果发现有问题将拒绝接收。</p>
+<p>对于情况2：</p>
+<p>​    首先，两个节点同时生成区块太难了。即使有这种情况，其他节点会选择其中的一个，在上面继续延伸。选择的机制在分叉的处理部分会提及。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>比特币的出现，解决了分布式环境下，没有可信第三方的场景中的交易问题，但有其局限性。为了扩展其使用场景，出现了各种各样的“币”，以及其他形式。借用中本聪文章里对于Bitcoin的描述，成为“区块链”。</p>
+<p>Bitcoin通过PoW的共识方式保证所有矿工节点记账都是一致的，即使有人作恶，也会因为少数服从多数的策略而失败；通过签名和公钥的方式来进行身份的验证；矿工节点记录区块和生成区块的时候，进行验证以防止双花。</p>
+<h1 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h1><p>[1] Nakamoto S. Bitcoin: A peer-to-peer electronic cash system[R]. Manubot, 2019.</p>
+<p>[2] 佚名. 比特币扩容纷争：双链的诞生. <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/30930715">https://zhuanlan.zhihu.com/p/30930715</a>, 2017-11-15.</p>
+<p>[3] Zhang R, Xue R, Liu L. Security and privacy on blockchain[J]. ACM Computing Surveys (CSUR), 2019, 52(3): 1-34.</p>
+
     </div>
 
     <div>全文完。</div>
   </article>
   <div class="toc-container">
     
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8C%BA%E5%9D%97%E9%93%BE%E3%80%81%E6%AF%94%E7%89%B9%E5%B8%81%EF%BC%8C%E5%88%B0%E5%BA%95%E6%98%AF%E4%BB%80%E4%B9%88%E5%85%B3%E7%B3%BB%EF%BC%9F"><span class="toc-text">区块链、比特币，到底是什么关系？</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%AF%94%E7%89%B9%E5%B8%81"><span class="toc-text">比特币</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8C%BA%E5%9D%97%E9%93%BE"><span class="toc-text">区块链</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Bitcoin%E6%98%AF%E5%A6%82%E4%BD%95%E8%BF%90%E8%A1%8C%E7%9A%84"><span class="toc-text">Bitcoin是如何运行的</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%97%AE%E9%A2%98%E7%9A%84%E7%AD%94%E6%A1%88"><span class="toc-text">问题的答案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E8%BE%BE%E6%88%90%E5%85%B1%E8%AF%86"><span class="toc-text">如何达成共识</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E7%9F%BF%E5%B7%A5%E8%A6%81%E6%8C%89%E8%A7%84%E5%88%99%E6%8C%96%E7%9F%BF%EF%BC%9F"><span class="toc-text">为什么矿工要按规则挖矿？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#PoW%E6%98%AF%E5%A6%82%E4%BD%95%E4%BF%9D%E8%AF%81%E5%85%B1%E8%AF%86%E7%9A%84%EF%BC%9F"><span class="toc-text">PoW是如何保证共识的？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%BF%99%E7%A7%8D%E6%96%B9%E5%BC%8F%E7%9C%9F%E7%9A%84%E5%AE%89%E5%85%A8%E5%90%97%EF%BC%9F"><span class="toc-text">这种方式真的安全吗？</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E8%AF%81%E6%98%8E%E8%BD%AC%E8%B4%A6%E4%BF%A1%E6%81%AF%E4%B8%8D%E6%98%AF%E4%BC%AA%E9%80%A0%E7%9A%84%EF%BC%9F"><span class="toc-text">如何证明转账信息不是伪造的？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E9%98%B2%E6%AD%A2%E5%8F%8C%E8%8A%B1%EF%BC%88Double-Spending%EF%BC%89%EF%BC%9F"><span class="toc-text">如何防止双花（Double Spending）？</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A6%82%E6%9E%9C%E6%9C%89%E4%BA%BA%E4%BD%9C%E6%81%B6"><span class="toc-text">如果有人作恶</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><span class="toc-text">参考文献</span></a></li></ol>
+  </div>
+
 
   </div>
 </div>
