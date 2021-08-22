@@ -1,0 +1,431 @@
+
+<!DOCTYPE html>
+<html lang="">
+
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#202020"/>
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="google-site-verification" content="-D9Uisj3xTi8Bv3Psr7gf3qKRfGei6v4_hyvxwWprC0" />
+  <script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+  
+  
+    <meta name="keywords" content="区块链," />
+  
+
+  
+    <meta name="description" content="区块链安全初探（二）：区块链的层次" />
+  
+  
+  <link rel="icon" type="image/x-icon" href="/logo.png">
+  <title>区块链安全初探（二）：区块链的层次 [ RunningHacker ]</title>
+  
+    <!-- stylesheets list from config.yml -->
+    
+      <link rel="stylesheet" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css">
+    
+      <link rel="stylesheet" href="/css/xoxo.css">
+    
+  
+<meta name="generator" content="Hexo 5.4.0"></head>
+
+
+<body>
+  <div class="nav-container">
+    <nav class="home-menu pure-menu pure-menu-horizontal">
+  <a class="pure-menu-heading" href="/">
+    <img class="avatar" src="http://blog.runninghacker.cn/images/logo.png">
+    <span class="title">RunningHacker</span>
+  </a>
+
+  <ul class="pure-menu-list clearfix">
+      
+          
+            <li class="pure-menu-item"><a href="/" class="pure-menu-link">首页</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/archives" class="pure-menu-link">归档</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/tags" class="pure-menu-link">标签</a></li>
+          
+      
+          
+            <li class="pure-menu-item"><a href="/atom.xml" class="pure-menu-link">订阅</a></li>
+          
+      
+  </ul>
+   
+</nav>
+  </div>
+
+  <div class="container" id="content-outer">
+    <div class="inner" id="content-inner">
+      <div class="post-container">
+  <article class="post" id="post">
+    <header class="post-header text-center">
+      <h1 class="title">
+        区块链安全初探（二）：区块链的层次
+      </h1>
+      <span>
+        
+        <time class="time" datetime="2021-07-07T13:48:19.000Z">
+        2021-07-07
+      </time>
+        
+      </span>
+      <span class="slash">/</span>
+      <span class="post-meta">
+      <span class="post-tags">
+        <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%8C%BA%E5%9D%97%E9%93%BE/" rel="tag">区块链</a></li></ul>
+      </span>
+    </span>
+      <span class="slash">/</span>
+      <span class="read">
+      <span id="busuanzi_value_page_pv"></span> 点击
+    </span>
+      <span class="slash">/</span>
+      <span class="read">阅读耗时 37 分钟</span>
+    </header>
+
+    <div class="post-content">
+      <p>随着比特币的发展，逐渐这个技术火出了圈。它提供的不可篡改、可追溯、不依赖第三方信任的特性看上去是那么的诱人，很多的行业都想借鉴这一技术。但是比特币的共识机制PoW实在是太浪费资源了（算力、电力），而且仅仅只能记录交易、平均每秒7笔的交易速度等等瓶颈都限制其在其他行业的发展。</p>
+<p>于是，基于比特币思想的其他类型的技术就开始涌现出来[1]。</p>
+<span id="more"></span>
+
+
+
+<h1 id="区块链的发展"><a href="#区块链的发展" class="headerlink" title="区块链的发展"></a>区块链的发展</h1><p>由于在”CCTC 2017 中国云计算技术大会“上，有一篇相关演讲《区块链技术回顾与展望》，较为详细的从相关密码学理论的起源开始阐述了区块链技术的发展史，不过该PPT好像并没有在大会的官网下载页面提供，可以从<a target="_blank" rel="noopener" href="http://pic.huodongjia.com/ganhuodocs/2017-06-15/1497513853.16.pdf">这里</a>进行下载。或者查看[1]中的详细内容。</p>
+<h2 id="区块链1-0：数字货币"><a href="#区块链1-0：数字货币" class="headerlink" title="区块链1.0：数字货币"></a>区块链1.0：数字货币</h2><p>随着中本聪在2009年1月上线了第一个版本，他挖出的创世区块和第一笔50个Bitcoin成为数字货币体系的开端。</p>
+<p>但是，Bitcoin体系有着诸多的问题，比如区块的容量、生成区块的时间等等。当然，我认为中本聪在设计这一体系的时候，就是想用高昂的代价（时间成本、算力成本、电力成本）来保障数字货币的安全。因此，就有人在比特币的基础上进行“魔改”，如2011年发布的莱特币，将PoW中的 <em>SHA256算法</em> 替换成 <em>Scrypt算法</em>，使得普通计算机更容易加入挖矿。</p>
+<p>随后，各种各样的魔改版本上线，彼时大家都称之为“XX币”，这项技术仍然在 <strong>数字货币</strong> 领域发展。</p>
+<h2 id="区块链2-0：图灵完备"><a href="#区块链2-0：图灵完备" class="headerlink" title="区块链2.0：图灵完备"></a>区块链2.0：图灵完备</h2><p>由于数字货币体系中，每个节点只是傻傻的记录静态数据，而不能完成更复杂的操作，比如“A在10天后向B转账1BTC”，这种操作在之前的系统中只能是到“10天后”这个时间点上由A操作，而不能在10天前就定义好由系统自动执行。</p>
+<p>以太坊的出现，带来了智能合约的概念，扩展了原来单纯的数字货币的体系，使得区块链系统可以执行一些复杂操作，有点类似于“小程序”的概念。</p>
+<p>区块链1.0是发一发文字消息，2.0允许有小程序了，更加智能、功能更加完善，也是由此区块链技术从单纯的数字货币、分布式账本开始向各行各业渗透。</p>
+<h2 id="区块链3-0：包罗万象"><a href="#区块链3-0：包罗万象" class="headerlink" title="区块链3.0：包罗万象"></a>区块链3.0：包罗万象</h2><p>目前来说，区块链3.0仍是一个概念。由于区块链描绘的“不依赖第三方的信任”、“不可篡改”的概念过于诱人，使得人们幻想能把全部的资产都上链进行管理。“在一个大的底层框架内构筑各式各样的应用，打造一个无信任成本、具备超强交易能力、风险极低的平台”[2]。</p>
+<h1 id="区块链技术的层次模型"><a href="#区块链技术的层次模型" class="headerlink" title="区块链技术的层次模型"></a>区块链技术的层次模型</h1><p>从区块链的发展中可以看出，虽然后续出现了各种各样的实现，但再怎么变化都是脱胎于中本聪的比特币。因此，即使看似已经是一个全新的技术了（比如Hyperledger Fabric），但核心思想依然和比特币是一致的。</p>
+<p>比特币能够在一个多方参与的没有可信第三方的环境下维护其数字货币，主要技术有：</p>
+<ol>
+<li>共识机制，能保证所有参与节点记账的内容一致</li>
+<li>默尔克树的存储结构，保证数据可查找、能迅速定位到有问题的某条数据上</li>
+<li>P2P网络连接，节点发现、广播机制、接收数据后的处理机制等</li>
+</ol>
+<p>而随着“区块链2.0”的出现，带来了智能合约技术，以及构建在智能合约之上的应用。因此大致可以将区块链拆解成6个技术分类：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210627140127036.png" alt="image-20210627140127036"></p>
+<p style="text-align:center">图1. 区块链的6层模型[3]</p>
+
+<p>在这个模型中，不同区块链技术之间，越往下（靠近Data layer）就越趋同，而越往上（靠近Application layer）就差异越大。其中红色虚线标出的，是区块链2.0新增的技术。</p>
+<p>但是，恰恰是底层的技术才是更加具有区块链特色的技术。</p>
+<p>这里插一句，现在各方大谈区块链，那么区块链到底好在哪？百度百科<a target="_blank" rel="noopener" href="https://baike.baidu.com/item/%E5%8C%BA%E5%9D%97%E9%93%BE/13465666">“区块链”词条</a>中给出的<strong>特点</strong>有：</p>
+<blockquote>区块链是一个分布式的共享账本和数据库，具有去中心化、不可篡改、全程留痕、可以追溯、集体维护、公开透明等特点。</blockquote>
+
+<p>可以看到，其中最有价值的就是去中心化和不可篡改这两点，而本质上也是解决了信任问题。任何第三方都不是<strong>绝对</strong>可信的，因此区块链解决了这一问题。区块链技术的本质也正是如此，在没有可信第三方的分布式环境下保证用户交易（中本聪在论文里也是这样说的）。</p>
+<p>理清这一点，再回头看区块链的各项技术就会非常清晰，所有的操作都是为了这个目标而进行的。</p>
+<h2 id="数据层-Data-layer"><a href="#数据层-Data-layer" class="headerlink" title="数据层 Data layer"></a>数据层 Data layer</h2><p>数据层可以说是整个区块链最核心的部分之一（个人观点，其次是共识层），也奠定了区块链广为流传的特性中的“不可篡改”的特点。</p>
+<h3 id="数字签名-Digital-signature"><a href="#数字签名-Digital-signature" class="headerlink" title="数字签名 Digital signature"></a>数字签名 Digital signature</h3><p>这个部分也是中本聪第一个提及的点，为了解决“究竟是不是我转的账”这和问题。</p>
+<p>在用户发起交易（Transaction）的时候，通过用户的签名进行验证，可以保证该交易是用户本人发出的，而不是被恶意伪造的。这里的原理也比较好理解，和其他地方使用的签名并无不同。引用一张论文里的示意图：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210804210217560.png" alt="image-20210804210217560"></p>
+<p style="text-align:center">图2. Bitcoin中的交易示意图</p>
+
+<p>这里就能很清晰的看出签名是如何在一条交易信息里被使用的。</p>
+<h3 id="时间戳-Timestamp"><a href="#时间戳-Timestamp" class="headerlink" title="时间戳 Timestamp"></a>时间戳 Timestamp</h3><p>在区块链中，时间戳的概念并不是一个时间。</p>
+<p>在其他的领域里，时间戳可能是一个字符串，可以用各种方式表达，比如“年月日时分秒”，或者是从1900年以来的秒数/毫秒数等等。但是去请求某一个时间戳服务器却恰恰违背了“没有可信第三方”这个概念。</p>
+<p>进一步思考，时间戳的意义是什么？无非就是去表达交易的前后顺序。比如我有1BTC，我把这个币转给了A，同时我又发了一条交易，将这个币转给B。一个币转给了两个人，那哪一次是有效的、哪一次是无效的？</p>
+<p>当然你可以说，看时间早的那条就是有效的。可是时间戳有可能被更改，即使是权威服务器给出的时间戳。</p>
+<p>因此中本聪提出，并不使用时间戳，而是哈希来解决这个问题。这个想法真的太精妙了。</p>
+<p>在计算当前区块的哈希时，带上前一区块的哈希，这样一直下去，通过不断的迭代来强化前后顺序，在保证交易顺序的同时，也形成了<strong>“链”式结构</strong>（Chain structure）。这一经典的结构也是区块链这一名字的由来。</p>
+<p>依然引用原文中的示意图：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210804212238678.png" alt="image-20210804212238678"></p>
+<p style="text-align:center">图3. 中本聪描述的“时间戳”的概念示意图</p>
+
+<p>一点题外话：最近在学习区块链的过程中，看到一篇关于时间戳的文章，简直离谱……链接就不放了，以免误导其他人，给一个截图：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210804212602798.png" alt="image-20210804212602798"></p>
+<p>（讲道理，有一个地方进行“公证“，还玩啥区块链，直接找这个公证方记账它不！香！吗！）</p>
+<p>给一个比较靠谱的、解释的非常清晰的链接，可以详细的了解一下：<a target="_blank" rel="noopener" href="https://happypeter.github.io/binfo/timestamp">比特币的时间戳服务器</a></p>
+<h3 id="数据区块-Data-blocks"><a href="#数据区块-Data-blocks" class="headerlink" title="数据区块 Data blocks"></a>数据区块 Data blocks</h3><p>区块链，顾名思义就是区块组成的链。它的基本元素就是数据区块（Data block），通过哈希指针的方式串联在一起，形成一个前后顺序，从而形成”链（Chain）“。</p>
+<p>作为基本元素，区块承担了存储数据和校验两个功能。一个区块的结构如下图所示：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210805104452624-8131493.png" alt="image-20210805104452624"></p>
+<p style="text-align:center">图4. 区块示意图[4]</p>
+
+<p>其中主要是区块头（BlockHeader）和交易（Transactions）两个部分最为核心。</p>
+<p><strong>区块头</strong>。在区块头中，包含有上一个区块的哈希值（HashPrevBlock）以及当前区块中的交易的哈希（HashMerkleRoot）两个值。HashPrevBlock 是一个指向其父块的哈希指针，形成了链的结构。同时，也是一个“合法性”的证明（个人观点），说明了当前区块的来源，是哪一个块的后续。HashMerkleRoot 是对当前块中包含的交易的完整性校验，用来验证当前区块中的交易是否被篡改。</p>
+<p><strong>交易</strong>。交易就是转账记录，条数不固定，但容量最大为1M。组织数据的方式为哈希树（Merkle tree）。</p>
+<h3 id="哈希树-Merkle-tree"><a href="#哈希树-Merkle-tree" class="headerlink" title="哈希树 Merkle tree"></a>哈希树 Merkle tree</h3><p>也有成为默克尔树的，由于其发明人姓Merkle，故有此称呼，也有翻译为默克树的。</p>
+<p>这一结构可以快速校验数据，比如某个区块里有10个交易，其中1个被篡改了。如果没有这个结构，可以通过哈希计算发现实际哈希与区块头的哈希不一致，而究竟是哪一个交易被篡改了并不知道。而使用哈希树则可以快速判断出结果。</p>
+<p>详细解释引用一篇知乎的文章，我觉得写得比较清晰：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/40142647">默克尔树是什么？</a></p>
+<h3 id="哈希算法-Hash-functions"><a href="#哈希算法-Hash-functions" class="headerlink" title="哈希算法 Hash functions"></a>哈希算法 Hash functions</h3><p>区块链中用到哈希的地方有很多，比如比特币挖矿的时候算的哈希，签名机制里的哈希，区块头中的哈希等等。这里数据层中的哈希算法，指的是存储的数据中涉及哈希的字段用何种算法。比如交易签名中，需要生成交易数据的哈希；上一区块的哈希，等等。由于不同的哈希算法的安全性与计算复杂度各不相同（此处不展开说明），涉及到计算速度和安全性的平衡。</p>
+<h2 id="网络层-Network-layer"><a href="#网络层-Network-layer" class="headerlink" title="网络层 Network layer"></a>网络层 Network layer</h2><p>对于区块链的网络层来说，虽然它的特点之一是分布式网络结构，但是对于网络层没有什么特别的设计。中本聪的原文里的 “Network” 章节实际上说的是数据验证。</p>
+<h3 id="P2P网络和传输协议"><a href="#P2P网络和传输协议" class="headerlink" title="P2P网络和传输协议"></a>P2P网络和传输协议</h3><p>这两个部分放在一起讲，主要是这部分没有一些特殊的改动，主要目的就是将所有节点连接起来，并且准确、安全的传输数据。传输协议（Transmission Protocol）可以直接用TCP/UDP传明文，或者用TLS建立安全信道。这些选项并不会对功能造成影响，只是可能会遭受额外的攻击。</p>
+<h3 id="验证机制-Verification-mechanism"><a href="#验证机制-Verification-mechanism" class="headerlink" title="验证机制 Verification mechanism"></a>验证机制 Verification mechanism</h3><p>中本聪在论文里特别提及了验证机制：</p>
+<blockquote>
+  The steps to run the network are as follows:
+  <div style="text-indent:2em">
+    <p>1) New transactions are broadcast to all nodes.</p>
+    <p>2) Each node collects new transactions into a block.</p>
+    <p>3) Each node works on finding a difficult proof-of-work for its block.</p>
+    <p>4) When a node finds a proof-of-work, it broadcasts the block to all nodes.</p>
+    <p>5) Nodes accept the block only if all transactions in it are valid and not already spent.</p>
+    <p>6) Nodes express their acceptance of the block by working on creating the next block in the chain, using the hash of the accepted block as the previous hash.</p>
+  </div>
+</blockquote>
+其实从比特币的设计机制来看，这部分的工作和网络传输是解耦的。但是在流程上，确实是在收到数据包之后进行的，因此在文章中作者也把这部分机制的描述归结到网络层中了。
+
+<p>1）新的交易 (Transaction) 通过广播的方式发送给所有节点。</p>
+<p>2）每一个节点将新的交易放进区块中。</p>
+<p>3）每一个节点进行PoW（即挖矿的过程）。</p>
+<p>4）当一个节点完成PoW的计算，将该区块广播出去。</p>
+<p>5）其他节点在接收到区块后，验证该区块以及每条交易，保证区块的完整性以及每条交易中的比特币都是没有被花出去的（这里是验证机制的重点，由每个节点去保证区块的完整性并阻止双花）。</p>
+<p>6）节点接受区块的表现，是在这个区块之上建立新的区块，并将该区块的哈希作为 “Previous hash” 包含在新的区块中。</p>
+<h2 id="共识层-Consensus-layer"><a href="#共识层-Consensus-layer" class="headerlink" title="共识层 Consensus layer"></a>共识层 Consensus layer</h2><p>比特币提出的共识协议是PoW，通过计算哈希的方式作为证明。但是PoW的方式会无谓的消耗硬件算力资源和电力资源，导致能源的浪费。之前在国内一些电价便宜的地方，比如内蒙、四川，就有大量矿场。</p>
+<p>而随着”区块链“技术的兴起和发展，应用在其他领域，这种资源消耗是无意义的，因此就有很多其他的共识协议的提出，比如<strong>Proof-of-Stack</strong> (PoS, 权益证明)，<strong>Delegated-Proof-of-Stack</strong> (DPoS, 委托权益证明)，<strong>Pratical Byzantine Fault Tolerance</strong> (PBFT, 使用拜占庭容错)等等。</p>
+<p>关于共识协议的解释，有很多相关文章，这里就不再赘述，给出几篇文章供参考：</p>
+<p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/33114775">区块链之工作量证明，挖矿是什么？</a></p>
+<p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/X-knight/p/9157814.html">区块链] 共识算法之争（PBFT，Raft，PoW，PoS，DPoS，Ripple）</a></p>
+<p><strong>然而，比较有意思的是，随着适应新场景的新的共识协议的产生，这些共识协议变得越来越中心化。比如PoS，通过持有的货币的量和时长来分配记账权，或者超级账本(Hyper Ledger)提供的Raft协议去选举Leader节点等，显示出了作为中心化的系统的高效，或者说为了效率而牺牲了一部分的分布式的”对等“性，是非常有趣的现象。</strong></p>
+<p>另外，共识层涉及到”挖矿“获取收益的过程。每个节点在打包区块时，都会默认加上一条从”比特币系统(COINBASE)“给自己转账的交易。这样一旦成功，自己的账户就多了一笔挖矿收益。</p>
+<p>这个部分可以从交易列表中看到。比如在某比特币浏览器中可以找到（一般在第一条）：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210822142732102.png" alt="image-20210822142732102"></p>
+<p>另可参见<a target="_blank" rel="noopener" href="https://www.liaoxuefeng.com/wiki/1207298049439968/1311929771491361">挖矿原理</a></p>
+<h2 id="激励层-Incentive-layer"><a href="#激励层-Incentive-layer" class="headerlink" title="激励层 Incentive layer"></a>激励层 Incentive layer</h2><p>激励层是数字货币能吸引用户加入的核心，或者说体现其货币价值的基础。激励层规定了挖矿的奖励数额、交易中的手续费等和数字货币的产生与交易相关的机制。</p>
+<p>比如对于比特币来说，其“<strong>发行机制Currency issue mechanism</strong>”是随时间递减的，初始挖矿奖励50比特币，每21万个区块后，挖矿奖励减半。而“<strong>分配机制 Currency distribution mechanism</strong>”是当小算力节点加入矿池之后，如何分配获取的奖励问题。</p>
+<p>对于矿池这个概念，可以参考百度百科的“<a target="_blank" rel="noopener" href="https://baike.baidu.com/item/%E7%9F%BF%E6%B1%A0/18622658">矿池</a>”词条，在此也不做赘述了。</p>
+<p>此外，中本聪还提到，激励层可以让参与者保持忠诚。</p>
+<blockquote>he incentive may help encourage nodes to stay honest. If a greedy attacker is able to assemble more CPU power than all the honest nodes, he would have to choose between using it to defraud people by stealing back his payments, or using it to generate new coins. He ought to find it more profitable to play by the rules, such rules that favour him with more new coins than everyone else combined, than to undermine the system and the validity of his own wealth.</blockquote>
+
+<p>即使当一个攻击者获取了超过50%的算力时，与其破坏账本数据，还不如继续挖矿。因为同样的算力继续挖矿的收益可能要远远大于破坏现有账本的收益更大。</p>
+<h2 id="合约层-Contract-layer"><a href="#合约层-Contract-layer" class="headerlink" title="合约层 Contract layer"></a>合约层 Contract layer</h2><p>合约层经过发展，从最初的比特币脚本发展到后来的智能合约，为区块链的应用创造了无限可能。</p>
+<h3 id="比特币脚本-Script-code"><a href="#比特币脚本-Script-code" class="headerlink" title="比特币脚本 Script code"></a>比特币脚本 Script code</h3><p>由于比特币是没有”账户“这个概念的，因此A向B转账之后，虽然被记录下来，但在花出去这笔钱的时候，又如何证明花钱的人是B呢？</p>
+<p>因此，脚本就是一种对身份的验证。比起单纯的验证公钥、签名等，使用脚本的方式可以使得验证更加灵活，比如可以规定，任何人只要能”够提供一个数据，它的SHA256是<code>6fe28c0a...0000</code>，谁就可以花费这笔交易[5]“。</p>
+<h3 id="智能合约-Smart-contract"><a href="#智能合约-Smart-contract" class="headerlink" title="智能合约 Smart contract"></a>智能合约 Smart contract</h3><p>由于比特币的脚本是图灵非完备的，”没有循环或者复杂流控制功能以外的其他条件的流控制[6]“，因此其复杂性有限，只能完成一些简单的验证操作。</p>
+<p>而以太坊支持的智能合约，则是图灵完备的脚本语言，运行在以太坊虚拟机EVM中，任何人都可以编写脚本来执行任意的逻辑，甚至与在以太坊的基础上发布新的代币等。</p>
+<p>以太坊官方对智能合约的解释如下：</p>
+<blockquote><p>
+  智能合约只是一个运行在以太坊链上的一个程序。 它是位于以太坊区块链上一个特定地址的一系列代码（函数）和数据（状态）。
+  </p><p>
+  智能合约就是一个以太坊帐户。 这意味着他们有余额，他们可以通过网络进行交易。 但是，他们无法被人操控，他们是被部署在网络上作为程序运行着。 个人用户可以通过提交交易执行智能合约的某一个函数来与智能合约进行交互。 智能合约能像常规合同一样定义规则，并通过代码自动强制执行。
+  </p>
+  </blockquote>
+
+<p>可以在以太坊官网的”<a target="_blank" rel="noopener" href="https://ethereum.org/zh/developers/docs/smart-contracts/">智能合约简介</a>“页面了解详细内容。</p>
+<h2 id="应用层-Application-layer"><a href="#应用层-Application-layer" class="headerlink" title="应用层 Application layer"></a>应用层 Application layer</h2><p>应用层指的是区块链技术支持的应用场景。</p>
+<p>只有底层的技术，它并不能成为一个可以使用的产品。比如比特币（注意这里指的是供用户使用的”产品“）就是一个应用。底层技术是为了承载比特币这个应用，提供给用户进行交易。</p>
+<p>扩展到整个区块链技术上来说，就是各家最喜欢说的”落地“的产品。区块链医疗、区块链税务等等。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>这篇文章如此之长，主要是尽量全面的以比特币作为例子介绍了区块链的各方面技术。</p>
+<p>比特币作为区块链的鼻祖，是最具有代表性、特点最明确的一个大规模使用的技术，因此比较值得研究和借鉴。在其之上成长起来的区块链以及衍生出的各种技术，也是为了使得这个分布式账本技术融合到其他领域，发挥其独特的作用。</p>
+<p>但是，无论怎么改变，区块链都应该秉持其分布式、不依赖第三方的信任的核心思想，这才是区块链技术应有的精髓。我认为，有些领域是否应该使用区块链，或者是否有更好的可替代技术，是更应该摆在第一位思考的问题，而不是如何强行将这一技术融入。</p>
+<h1 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h1><p>[1]  创业Daily. 软件好，才是真的好：区块链的1976—2017. <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/29161177">https://zhuanlan.zhihu.com/p/29161177</a>, 2017-09-08</p>
+<p>[2] 区块链3.0到底是什么？ - Starteos.io的回答 - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/280886318/answer/632614575">https://www.zhihu.com/question/280886318/answer/632614575</a></p>
+<p>[3] Zhang R, Xue R, Liu L. Security and privacy on blockchain[J]. ACM Computing Surveys (CSUR), 2019, 52(3): 1-34.</p>
+<p>[4] Dasgupta D, Shrein J M, Gupta K D. A survey of blockchain from security perspective[J]. Journal of Banking and Financial Technology, 2019, 3(1): 1-17.</p>
+<p>[5] 深入理解比特币交易的脚本. <a target="_blank" rel="noopener" href="https://www.liaoxuefeng.com/article/1124144362997184">https://www.liaoxuefeng.com/article/1124144362997184</a>, 2017-1-8</p>
+<p>[6] 比特币区块链（八） | 比特币中的脚本系统  - 苏小乐的回答 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/33157713">https://zhuanlan.zhihu.com/p/33157713</a></p>
+
+    </div>
+
+    <div>全文完。</div>
+  </article>
+  <div class="toc-container">
+    
+  <div id="toc" class="toc-article">
+    <strong class="toc-title">目录</strong>
+    <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%8F%91%E5%B1%95"><span class="toc-text">区块链的发展</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8C%BA%E5%9D%97%E9%93%BE1-0%EF%BC%9A%E6%95%B0%E5%AD%97%E8%B4%A7%E5%B8%81"><span class="toc-text">区块链1.0：数字货币</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8C%BA%E5%9D%97%E9%93%BE2-0%EF%BC%9A%E5%9B%BE%E7%81%B5%E5%AE%8C%E5%A4%87"><span class="toc-text">区块链2.0：图灵完备</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8C%BA%E5%9D%97%E9%93%BE3-0%EF%BC%9A%E5%8C%85%E7%BD%97%E4%B8%87%E8%B1%A1"><span class="toc-text">区块链3.0：包罗万象</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8C%BA%E5%9D%97%E9%93%BE%E6%8A%80%E6%9C%AF%E7%9A%84%E5%B1%82%E6%AC%A1%E6%A8%A1%E5%9E%8B"><span class="toc-text">区块链技术的层次模型</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%B1%82-Data-layer"><span class="toc-text">数据层 Data layer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E5%AD%97%E7%AD%BE%E5%90%8D-Digital-signature"><span class="toc-text">数字签名 Digital signature</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E6%88%B3-Timestamp"><span class="toc-text">时间戳 Timestamp</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%8C%BA%E5%9D%97-Data-blocks"><span class="toc-text">数据区块 Data blocks</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%93%88%E5%B8%8C%E6%A0%91-Merkle-tree"><span class="toc-text">哈希树 Merkle tree</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95-Hash-functions"><span class="toc-text">哈希算法 Hash functions</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E5%B1%82-Network-layer"><span class="toc-text">网络层 Network layer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#P2P%E7%BD%91%E7%BB%9C%E5%92%8C%E4%BC%A0%E8%BE%93%E5%8D%8F%E8%AE%AE"><span class="toc-text">P2P网络和传输协议</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81%E6%9C%BA%E5%88%B6-Verification-mechanism"><span class="toc-text">验证机制 Verification mechanism</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B1%E8%AF%86%E5%B1%82-Consensus-layer"><span class="toc-text">共识层 Consensus layer</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%BF%80%E5%8A%B1%E5%B1%82-Incentive-layer"><span class="toc-text">激励层 Incentive layer</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%88%E7%BA%A6%E5%B1%82-Contract-layer"><span class="toc-text">合约层 Contract layer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AF%94%E7%89%B9%E5%B8%81%E8%84%9A%E6%9C%AC-Script-code"><span class="toc-text">比特币脚本 Script code</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6-Smart-contract"><span class="toc-text">智能合约 Smart contract</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BA%94%E7%94%A8%E5%B1%82-Application-layer"><span class="toc-text">应用层 Application layer</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-text">总结</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><span class="toc-text">参考文献</span></a></li></ol>
+  </div>
+
+
+  </div>
+</div>
+<div class="copyright">
+    <span>本作品采用</span>
+    <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by/4.0/">知识共享署名 4.0 国际许可协议</a>
+    <span>进行许可。 转载时请注明原文链接。</span>
+</div>
+
+  <div id="gitalk-container"></div>
+  <link rel="stylesheet" href="https://unpkg.com/gitalk@latest/dist/gitalk.css">
+<script src="https://unpkg.com/gitalk@latest/dist/gitalk.min.js"></script>
+<script src="https://priesttomb.github.io/js/md5.min.js"></script>
+<script type="text/javascript">
+    new Gitalk({
+        clientID: 'b1ea9aed8ae674a0fde6',
+        clientSecret: 'b19957495669da062300bff870f7e304bed03f95',
+        owner: 'mactavishmeng',
+        admin: ['mactavishmeng'],
+        repo: 'mactavishmeng.github.io',
+        id: md5(location.pathname),
+        distractionFreeMode: true
+    }).render('gitalk-container')
+</script>
+
+<div class="share" style="width: 100%;">
+  
+</div>
+
+  
+    <div class="post-nav">
+      <div class="post-nav-item post-nav-next">
+        
+          <span>〈 </span>
+          <a href="/2021/06/23/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%88%9D%E6%8E%A2/" rel="next" title="区块链安全初探：比特币概述">
+          区块链安全初探：比特币概述
+          </a>
+        
+      </div>
+  
+      <div class="post-nav-item post-nav-prev">
+          
+      </div>
+    </div>
+  
+
+
+    </div>
+
+    
+
+  </div>
+  <footer class="footer text-center">
+    <div id="bottom-inner">
+        <a class="bottom-item" target="_blank" rel="noopener" href="https://blog.0xff000000.com">首页</a> |
+        <a class="bottom-item" href="https://0xff000000.com" target="_blank">主站</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu" target="_blank">GitHub</a> |
+        <a class="bottom-item" href="https://hexo.io" target="_blank">Powered by hexo</a> |
+        <a class="bottom-item" href="https://github.com/KevinOfNeu/hexo-theme-xoxo" target="_blank">Theme xoxo</a>
+    </div>
+</footer>
+  
+
+<script>
+  (function(window, document, undefined) {
+
+    var timer = null;
+
+    function returnTop() {
+      cancelAnimationFrame(timer);
+      timer = requestAnimationFrame(function fn() {
+        var oTop = document.body.scrollTop || document.documentElement.scrollTop;
+        if (oTop > 0) {
+          document.body.scrollTop = document.documentElement.scrollTop = oTop - 50;
+          timer = requestAnimationFrame(fn);
+        } else {
+          cancelAnimationFrame(timer);
+        }
+      });
+    }
+
+    var hearts = [];
+    window.requestAnimationFrame = (function() {
+      return window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function(callback) {
+          setTimeout(callback, 1000 / 60);
+        }
+    })();
+    init();
+
+    function init() {
+      css(".heart{z-index:9999;width: 10px;height: 10px;position: fixed;background: #f00;transform: rotate(45deg);-webkit-transform: rotate(45deg);-moz-transform: rotate(45deg);}.heart:after,.heart:before{content: '';width: inherit;height: inherit;background: inherit;border-radius: 50%;-webkit-border-radius: 50%;-moz-border-radius: 50%;position: absolute;}.heart:after{top: -5px;}.heart:before{left: -5px;}");
+      attachEvent();
+      gameloop();
+      addMenuEvent();
+    }
+
+    function gameloop() {
+      for (var i = 0; i < hearts.length; i++) {
+        if (hearts[i].alpha <= 0) {
+          document.body.removeChild(hearts[i].el);
+          hearts.splice(i, 1);
+          continue;
+        }
+        hearts[i].y--;
+        hearts[i].scale += 0.004;
+        hearts[i].alpha -= 0.013;
+        hearts[i].el.style.cssText = "left:" + hearts[i].x + "px;top:" + hearts[i].y + "px;opacity:" + hearts[i].alpha + ";transform:scale(" + hearts[i].scale + "," + hearts[i].scale + ") rotate(45deg);background:" + hearts[i].color;
+      }
+      requestAnimationFrame(gameloop);
+    }
+
+    /**
+     * 给logo设置点击事件
+     * 
+     * - 回到顶部
+     * - 出现爱心
+     */
+    function attachEvent() {
+      var old = typeof window.onclick === "function" && window.onclick;
+      var logo = document.getElementById("logo");
+      if (logo) {
+        logo.onclick = function(event) {
+          returnTop();
+          old && old();
+          createHeart(event);
+        }
+      }
+      
+    }
+
+    function createHeart(event) {
+      var d = document.createElement("div");
+      d.className = "heart";
+      hearts.push({
+        el: d,
+        x: event.clientX - 5,
+        y: event.clientY - 5,
+        scale: 1,
+        alpha: 1,
+        color: randomColor()
+      });
+      document.body.appendChild(d);
+    }
+
+    function css(css) {
+      var style = document.createElement("style");
+      style.type = "text/css";
+      try {
+        style.appendChild(document.createTextNode(css));
+      } catch (ex) {
+        style.styleSheet.cssText = css;
+      }
+      document.getElementsByTagName('head')[0].appendChild(style);
+    }
+
+    function randomColor() {
+      // return "rgb(" + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + "," + (~~(Math.random() * 255)) + ")";
+      return "#F44336";
+    }
+
+    function addMenuEvent() {
+      var menu = document.getElementById('menu-main-post');
+      if (menu) {
+        var toc = document.getElementById('toc');
+        if (toc) {
+          menu.onclick = function() {
+            if (toc) {
+              if (toc.style.display == 'block') {
+                toc.style.display = 'none';
+              } else {
+                toc.style.display = 'block';
+              }
+            }
+          };
+        } else {
+          menu.style.display = 'none';
+        }
+      }
+    }
+
+  })(window, document);
+</script>
+
+  
+
+
+
+</body>
+</html>

